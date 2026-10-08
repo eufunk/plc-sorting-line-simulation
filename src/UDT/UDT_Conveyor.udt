@@ -1,0 +1,17 @@
+TYPE "UDT_Conveyor"
+TITLE = Förderband M1
+// Zustand und Ansteuerung des Förderbands.
+// Geschrieben von FB_Conveyor, gelesen von Simulation, Paketverfolgung und HMI.
+VERSION : 0.1
+   STRUCT
+      AutoRequest : Bool;   // Anforderung aus Automatik: Band soll laufen
+      ManualRequest : Bool;   // Anforderung aus Handbetrieb (HMI-Taste)
+      Enable : Bool;   // Freigabe: kein Not-Halt, kein Störungsalarm
+      Run : Bool;   // Ergebnis -> Ausgang M1 (qConveyor)
+      Running : Bool;   // Band läuft tatsächlich (Run und Motorschutz OK)
+      Fault : Bool;   // Motorschutz ausgelöst
+      Speed : Real;   // Aktuelle Geschwindigkeit in %/s (0 oder BELT_SPEED)
+      RunSeconds : DInt;   // Betriebsstunden-Zähler in Sekunden (Diagnose)
+   END_STRUCT;
+
+END_TYPE

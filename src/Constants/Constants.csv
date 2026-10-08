@@ -1,0 +1,79 @@
+Name;Datentyp;Wert;Kommentar
+MAX_PACKAGES;Int;5;Maximale Anzahl aktiver Pakete
+PKG_EMPTY;Int;0;Paketstatus: Platz im Array frei
+PKG_WAITING;Int;1;Paketstatus: erzeugt, wartet auf freien Einlauf
+PKG_MOVING;Int;2;Paketstatus: auf dem Band, vor ST1
+PKG_DETECTED;Int;3;Paketstatus: an ST1 erkannt
+PKG_INSPECTION;Int;4;Paketstatus: durchläuft ST2-ST5
+PKG_SORTING;Int;5;Paketstatus: Ziel bestimmt, auf der Sortierstrecke
+PKG_SORTED;Int;6;Paketstatus: in Ausgang 1-3 angekommen
+PKG_REJECTED;Int;7;Paketstatus: in Ausgang 4 angekommen
+PKG_ERROR;Int;8;Paketstatus: Paketverfolgung verloren
+MAT_UNKNOWN;Int;0;Material: nicht gemessen
+MAT_METAL;Int;1;Material: Metall
+MAT_PLASTIC;Int;2;Material: Kunststoff
+SIZE_UNKNOWN;Int;0;Größe: nicht gemessen
+SIZE_SMALL;Int;1;Größe: klein
+SIZE_LARGE;Int;2;Größe: groß
+TARGET_NONE;Int;0;Ziel: noch nicht bestimmt
+TARGET_METAL;Int;1;Ziel: Ausgang 1 - Metall
+TARGET_PLASTIC_SMALL;Int;2;Ziel: Ausgang 2 - Kunststoff klein
+TARGET_PLASTIC_LARGE;Int;3;Ziel: Ausgang 3 - Kunststoff groß
+TARGET_REJECT;Int;4;Ziel: Ausgang 4 - Ausschuss
+REJ_NONE;Int;0;Ausschussgrund: keiner
+REJ_QUALITY;Int;1;Ausschussgrund: Qualität nicht OK
+REJ_UNDERWEIGHT;Int;2;Ausschussgrund: zu leicht (< WEIGHT_MIN)
+REJ_OVERWEIGHT;Int;3;Ausschussgrund: zu schwer (> WEIGHT_MAX)
+REJ_INVALID;Int;4;Ausschussgrund: ungültige Kombination
+REJ_MISSORT;Int;5;Ausschussgrund: Fehlsortierung, Ziel 1-3 am Bandende
+REJ_SCALE_FAULT;Int;6;Ausschussgrund: Waage Messfehler
+WEIGHT_MIN;Real;0.5;Mindestgewicht Gutteil in kg
+WEIGHT_MAX;Real;5.0;Höchstgewicht Gutteil in kg
+SCALE_RAW_MAX;Int;27648;Waage Rohwert bei Messbereichsende
+SCALE_KG_MAX;Real;10.0;Waage Messbereichsende in kg
+BELT_SPEED;Real;5.0;Bandgeschwindigkeit in %/s (0,5 m/s bei 10 m)
+SENSOR_WINDOW;Real;2.0;Sensor belegt bei Paketmitte +/- diesem Wert in %
+MIN_GAP;Real;15.0;Mindestabstand zwischen Paketen in %
+POS_ST1;Real;2.0;Position S1 Einlauf in %
+POS_ST2;Real;15.0;Position S2 Größe in %
+POS_ST3;Real;25.0;Position S3 Material in %
+POS_ST4;Real;35.0;Position S4 Waage in %
+POS_ST5;Real;45.0;Position S5 Qualität in %
+POS_S6;Real;55.0;Position S6 Beginn Sortierstrecke in %
+POS_SORTER1;Real;65.0;Position Sortierer Q1 in %
+POS_SORTER2;Real;75.0;Position Sortierer Q2 in %
+POS_SORTER3;Real;85.0;Position Sortierer Q3 in %
+POS_BELT_END;Real;100.0;Bandende in %
+SORTER_COUNT;Int;3;Anzahl Sortierer
+SORTER_RETRACTED;Int;0;Sortiererzustand: eingefahren (Grundstellung)
+SORTER_EXTENDING;Int;1;Sortiererzustand: fährt aus
+SORTER_EXTENDED;Int;2;Sortiererzustand: ausgefahren
+SORTER_RETRACTING;Int;3;Sortiererzustand: fährt ein
+SORTER_FAULT;Int;9;Sortiererzustand: Störung
+SORTER_TIMEOUT;Time;T#1S;Überwachungszeit Sortierer-Endlage
+SIM_SORTER_MOVE_TIME;Time;T#500MS;Simulierte Fahrzeit Sortierer
+EXIT_TIMEOUT;Time;T#2S;Überwachungszeit Paket am Ausgang
+ALM_EMERGENCY_STOP;Int;0;Alarmbit: Not-Halt
+ALM_MOTOR_PROTECT;Int;1;Alarmbit: Motorschutz ausgelöst
+ALM_SORTER1_EXTEND;Int;2;Alarmbit: Sortierer 1 nicht ausgefahren
+ALM_SORTER2_EXTEND;Int;3;Alarmbit: Sortierer 2 nicht ausgefahren
+ALM_SORTER3_EXTEND;Int;4;Alarmbit: Sortierer 3 nicht ausgefahren
+ALM_SORTER1_RETRACT;Int;5;Alarmbit: Sortierer 1 nicht zurückgefahren
+ALM_SORTER2_RETRACT;Int;6;Alarmbit: Sortierer 2 nicht zurückgefahren
+ALM_SORTER3_RETRACT;Int;7;Alarmbit: Sortierer 3 nicht zurückgefahren
+ALM_SORTER_PLAUSIBILITY;Int;8;Alarmbit: Endlagen unplausibel
+ALM_PACKAGE_LOST;Int;9;Alarmbit: Paket nicht erkannt
+ALM_EXIT_TIMEOUT;Int;10;Alarmbit: Paket nicht am Ausgang
+ALM_MISSORT;Int;11;Alarmbit (Warnung): Fehlsortierung
+ALM_SCALE_FAULT;Int;12;Alarmbit (Warnung): Waage Messfehler
+ALM_WARNING_MASK;Word;16#1800;Bits 11 und 12 sind Warnungen, alle anderen Störungen
+PLANT_OFF;Int;0;Anlagenzustand: aus
+PLANT_READY;Int;1;Anlagenzustand: Grundstellung, bereit
+PLANT_AUTO;Int;2;Anlagenzustand: Automatik läuft
+PLANT_MANUAL;Int;3;Anlagenzustand: Handbetrieb
+PLANT_FAULT;Int;4;Anlagenzustand: Störung
+PLANT_EMERGENCY;Int;5;Anlagenzustand: Not-Halt
+SIM_INTERVAL_MIN;Time;T#3S;Kleinste einstellbare Erzeugungsrate
+SIM_INTERVAL_MAX;Time;T#10S;Größte einstellbare Erzeugungsrate
+SIM_WEIGHT_MIN;Real;0.2;Kleinstes simuliertes Gewicht in kg
+SIM_WEIGHT_MAX;Real;8.0;Größtes simuliertes Gewicht in kg

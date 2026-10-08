@@ -1,0 +1,27 @@
+DATA_BLOCK "DB_Hmi"
+TITLE = Bedienbefehle vom HMI
+{ S7_Optimized_Access := 'TRUE' }
+// Alle Tasten und Eingaben des Bedienpanels.
+// Tasten (Start, Stop, Reset, ...) setzt das HMI auf TRUE, die Steuerung setzt sie nach Auswertung zurück.
+VERSION : 0.1
+NON_RETAIN
+   VAR
+      Plant : Struct   // Übersichtsbild
+         Start : Bool;   // Taste START
+         Stop : Bool;   // Taste STOPP
+         Reset : Bool;   // Taste RESET: Alarme zurücksetzen, ERROR-Pakete entfernen
+         SelectManual : Bool;   // Schalter Hand/Auto: TRUE = Hand
+      END_STRUCT;
+      Manual : Struct   // Handbetrieb (nur wirksam im Zustand PLANT_MANUAL)
+         ConveyorRun : Bool;   // Förderband EIN/AUS (Schalter)
+         SorterExtend : Array[1.."SORTER_COUNT"] of Bool;   // Tippbetrieb Sortierer 1..3
+      END_STRUCT;
+      Statistics : Struct   // Statistikbild
+         Reset : Bool;   // Taste Zähler zurücksetzen
+      END_STRUCT;
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK

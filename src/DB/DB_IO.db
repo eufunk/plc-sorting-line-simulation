@@ -1,0 +1,18 @@
+DATA_BLOCK "DB_IO"
+TITLE = Ein- und Ausgangsabbild
+{ S7_Optimized_Access := 'TRUE' }
+// Schnittstelle zwischen Steuerlogik und Prozess.
+// Inputs:  gefüllt von FB_InputMapping (aus %I oder aus FB_Simulation)
+// Outputs: geschrieben von der Steuerlogik, gelesen von FB_OutputMapping und FB_Simulation
+VERSION : 0.1
+NON_RETAIN
+   VAR
+      SimMode : Bool := TRUE;   // TRUE = Eingänge kommen aus der Simulation, FALSE = aus %I
+      Inputs : "UDT_IoInputs";
+      Outputs : "UDT_IoOutputs";
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK

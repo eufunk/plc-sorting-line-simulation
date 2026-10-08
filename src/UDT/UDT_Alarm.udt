@@ -1,0 +1,20 @@
+TYPE "UDT_Alarm"
+TITLE = Alarme der Anlage
+// Alarme als Bits in Words, damit WinCC sie direkt als Bitmeldungen verwenden kann.
+// Bitnummern: Konstanten ALM_* (siehe docs/Anlagenkonfiguration.md, Abschnitt 8).
+// Zugriff in SCL per Slice, z. B. #Alarm.Active.%X0
+// Achtung HMI: Bei Word-Triggervariablen zählt WinCC die Bits byteweise vertauscht
+// (PLC-Bit 0 = HMI-Bit 8). Bitnummern im HMI daher beim Anlegen der Meldungen prüfen.
+VERSION : 0.1
+   STRUCT
+      Active : Word;   // Alarmursache steht gerade an
+      Latched : Word;   // Alarm aufgetreten, gespeichert bis RESET (Triggervariable fürs HMI)
+      AckHmi : Word;   // Quittierbits vom HMI
+      Unacknowledged : Word;   // Aufgetreten, aber noch nicht quittiert
+      AnyFault : Bool;   // Mindestens ein Störungsalarm gespeichert -> Band aus, Zustand FAULT
+      AnyWarning : Bool;   // Mindestens eine Warnung gespeichert (Band läuft weiter)
+      Flash : Bool;   // Unquittierte Alarme vorhanden -> Störungsleuchte H2 blinkt
+      FirstAlarm : Int;   // Bitnummer des ersten Alarms seit dem letzten RESET (Erstwert), -1 = keiner
+   END_STRUCT;
+
+END_TYPE

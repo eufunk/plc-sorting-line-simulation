@@ -242,6 +242,23 @@ Ein Paket, das ein Ziel 1–3 hat, aber am Bandende ankommt (z. B. weil der Sort
 | 8 | Fehlsortierung | Paket mit Ziel 1–3 erreicht das Bandende | Paket → REJECTED, Warnung (Band läuft weiter) |
 | 9 | Waage Messfehler | S4 außerhalb 0–27648 | Paket → Ausschuss, Warnung |
 
+### Bitbelegung
+
+Die Alarme liegen als Bits in den Words von [`UDT_Alarm`](../src/UDT/UDT_Alarm.udt). Die Sortierer-Alarme 3 und 4 bekommen je Sortierer ein eigenes Bit, damit im HMI sichtbar ist, welcher Sortierer betroffen ist.
+
+| Bit | Konstante | Alarm | Art |
+|-----|-----------|-------|-----|
+| 0  | `ALM_EMERGENCY_STOP`      | Not-Halt | Störung |
+| 1  | `ALM_MOTOR_PROTECT`       | Motorschutz ausgelöst | Störung |
+| 2–4 | `ALM_SORTER1..3_EXTEND`  | Sortierer 1–3 nicht ausgefahren | Störung |
+| 5–7 | `ALM_SORTER1..3_RETRACT` | Sortierer 1–3 nicht zurückgefahren | Störung |
+| 8  | `ALM_SORTER_PLAUSIBILITY` | Endlagen unplausibel | Störung |
+| 9  | `ALM_PACKAGE_LOST`        | Paket nicht erkannt | Störung |
+| 10 | `ALM_EXIT_TIMEOUT`        | Paket nicht am Ausgang | Störung |
+| 11 | `ALM_MISSORT`             | Fehlsortierung | Warnung |
+| 12 | `ALM_SCALE_FAULT`         | Waage Messfehler | Warnung |
+| 13–15 | – | Reserve | – |
+
 ## 9. Simulierte Störungen
 
 Für die Fehlertests lassen sich im HMI (Diagnosebild) gezielt Störungen auslösen:

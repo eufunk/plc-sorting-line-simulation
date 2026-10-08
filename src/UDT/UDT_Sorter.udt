@@ -1,0 +1,22 @@
+TYPE "UDT_Sorter"
+TITLE = Pneumatischer Sortierer Q1..Q3
+// Ein Eintrag je Sortierer (Sorters[1..3]).
+// Geschrieben von FB_Sorting, gelesen von Simulation und HMI.
+// Zustandscodes: SORTER_RETRACTED .. SORTER_FAULT (PLC-Konstanten)
+VERSION : 0.1
+   STRUCT
+      AutoRequest : Bool;   // Automatik: Paket mit passendem Ziel steht vor dem Sortierer
+      ManualRequest : Bool;   // Handbetrieb: HMI-Taste ausfahren
+      Extend : Bool;   // Ergebnis -> Ventil Q1..Q3 (TRUE = ausfahren)
+      IsRetracted : Bool;   // Endlage eingefahren (S11 / S13 / S15)
+      IsExtended : Bool;   // Endlage ausgefahren (S12 / S14 / S16)
+      State : Int;   // SORTER_RETRACTED / _EXTENDING / _EXTENDED / _RETRACTING / _FAULT
+      MoveTime : Time;   // Laufzeit der aktuellen Bewegung, für Timeout-Überwachung
+      FaultExtend : Bool;   // Endlage ausgefahren nicht innerhalb SORTER_TIMEOUT erreicht
+      FaultRetract : Bool;   // Endlage eingefahren nicht innerhalb SORTER_TIMEOUT erreicht
+      FaultPlausibility : Bool;   // Beide Endlagen gleichzeitig belegt
+      PackageId : DInt;   // ID des Pakets, das gerade ausgeschleust wird, 0 = keins
+      StrokeCount : DInt;   // Anzahl Hübe (Verschleiß-Diagnose)
+   END_STRUCT;
+
+END_TYPE

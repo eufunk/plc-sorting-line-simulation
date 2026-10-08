@@ -1,0 +1,20 @@
+TYPE "UDT_SimPackage"
+TITLE = Paket aus Sicht der Simulation
+// "Physisches" Paket auf dem virtuellen Band.
+// Nur FB_Simulation liest und schreibt diese Daten und erzeugt daraus die Sensorsignale.
+// Die Steuerlogik greift nie darauf zu, sondern nur auf UDT_Workpiece.
+VERSION : 0.1
+   STRUCT
+      Active : Bool;   // TRUE = Paket existiert (wartend, auf dem Band oder in der Rutsche)
+      ID : DInt;   // ID zur Zuordnung in Diagnose und Tests
+      Position : Real;   // Tatsächliche Position der Paketmitte in %
+      OnBelt : Bool;   // FALSE = wartet am Einlauf oder wurde ausgeschleust
+      Size : Int;   // SIZE_SMALL / SIZE_LARGE
+      Material : Int;   // MAT_METAL / MAT_PLASTIC
+      Weight : Real;   // Gewicht in kg (0,2..8,0)
+      QualityOk : Bool;   // TRUE = Qualität OK
+      Exit : Int;   // 0 = noch auf dem Band, 1..4 = Ausgang, in dem das Paket gelandet ist
+      ExitTimer : Time;   // Laufzeit in der Rutsche bis zur Ausgangs-Lichtschranke
+   END_STRUCT;
+
+END_TYPE

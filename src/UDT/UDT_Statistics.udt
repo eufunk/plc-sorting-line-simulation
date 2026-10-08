@@ -1,0 +1,19 @@
+TYPE "UDT_Statistics"
+TITLE = Produktionsstatistik
+// Zähler und Kennzahlen für das HMI-Bild "Statistik".
+// Geschrieben von FB_Counters, zurückgesetzt per HMI-Taste.
+VERSION : 0.1
+   STRUCT
+      Total : DInt;   // Alle Pakete, die einen Ausgang erreicht haben
+      ExitCount : Array[1..4] of DInt;   // Pakete je Ausgang (Index = TARGET_*)
+      Good : DInt;   // Gutteile (Ausgang 1..3)
+      Rejected : DInt;   // Ausschuss (Ausgang 4)
+      Errors : DInt;   // Pakete mit Status PKG_ERROR
+      RejectReasonCount : Array[1..6] of DInt;   // Ausschuss je Grund (Index = REJ_*)
+      RejectRate : Real;   // Ausschussquote in % (Rejected / Total)
+      LastTransitTime : Time;   // Durchlaufzeit des letzten Pakets
+      AvgTransitTime : Time;   // Mittlere Durchlaufzeit
+      PackagesPerMinute : Real;   // Durchsatz
+   END_STRUCT;
+
+END_TYPE

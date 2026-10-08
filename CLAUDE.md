@@ -8,7 +8,7 @@
 ## TIA Portal und Repository
 
 - Das TIA-Portal-Projekt liegt **außerhalb** des Repositorys und außerhalb von OneDrive (z. B. `C:\TIA\SortingLine\`).
-- Ins Repository kommen nur exportierte Textquellen: SCL-Bausteine (`.scl`) und UDTs (`.udt`) unter `src/`.
+- Ins Repository kommen nur exportierte Textquellen unter `src/`: SCL-Bausteine (`.scl`), UDTs (`.udt`), Datenbausteine (`.db`) und PLC-Konstanten (`.csv`).
 - Änderungen werden zwischen TIA-Projekt und `src/` per Export/Import der Quellen übertragen.
 
 ## Planung (`docs/Planung/`)

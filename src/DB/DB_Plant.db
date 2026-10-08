@@ -1,0 +1,19 @@
+DATA_BLOCK "DB_Plant"
+TITLE = Anlagenzustand und Geräte
+{ S7_Optimized_Access := 'TRUE' }
+// Anlagenzustand, Förderband, Sortierer und Alarme.
+// Zustandscodes: PLANT_OFF .. PLANT_EMERGENCY (PLC-Konstanten)
+VERSION : 0.1
+NON_RETAIN
+   VAR
+      State : Int;   // PLANT_OFF / _READY / _AUTO / _MANUAL / _FAULT / _EMERGENCY
+      HomePosition : Bool;   // Grundstellung: alle Sortierer eingefahren, kein Alarm
+      Conveyor : "UDT_Conveyor";
+      Sorters : Array[1.."SORTER_COUNT"] of "UDT_Sorter";
+      Alarm : "UDT_Alarm";
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK

@@ -1,0 +1,17 @@
+DATA_BLOCK "DB_Packages"
+TITLE = Paketverfolgung der Steuerung
+{ S7_Optimized_Access := 'TRUE' }
+// Alle Pakete, die die Steuerung gerade verfolgt.
+// Ein freier Platz hat Status = PKG_EMPTY.
+VERSION : 0.1
+NON_RETAIN
+   VAR
+      Packages : Array[1.."MAX_PACKAGES"] of "UDT_Workpiece";
+      NextId : DInt := 1;   // Nächste zu vergebende Paket-ID
+      ActiveCount : Int;   // Anzahl Pakete mit Status <> PKG_EMPTY
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK

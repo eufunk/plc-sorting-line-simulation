@@ -1,0 +1,14 @@
+DATA_BLOCK "DB_Statistics"
+TITLE = Produktionsstatistik
+{ S7_Optimized_Access := 'TRUE' }
+// Remanent: Die Zähler bleiben nach Spannungsausfall bzw. STOP/RUN erhalten.
+// Zurücksetzen nur über HMI (DB_Hmi.Statistics.Reset).
+VERSION : 0.1
+   VAR RETAIN
+      Statistics : "UDT_Statistics";
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK

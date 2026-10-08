@@ -1,0 +1,25 @@
+TYPE "UDT_Workpiece"
+TITLE = Paket aus Sicht der Steuerung
+// Ein Eintrag im Paketverfolgungs-Array (Packages[1..MAX_PACKAGES]).
+// Enthält nur, was die Steuerung über die Sensoren gemessen hat,
+// nicht die "wahren" Eigenschaften aus der Simulation (siehe UDT_SimPackage).
+// Codes für Status, Size, Material, Target und RejectReason: PLC-Konstanten (src/Constants/Constants.csv)
+VERSION : 0.1
+   STRUCT
+      ID : DInt;   // Eindeutige Paket-ID, 0 = kein Paket
+      Status : Int;   // PKG_EMPTY .. PKG_ERROR
+      Position : Real;   // Verfolgte Position der Paketmitte in % (0 = Einlauf, 100 = Bandende)
+      Size : Int;   // SIZE_UNKNOWN / SIZE_SMALL / SIZE_LARGE (ST2)
+      Material : Int;   // MAT_UNKNOWN / MAT_METAL / MAT_PLASTIC (ST3)
+      Weight : Real;   // Gemessenes Gewicht in kg (ST4)
+      QualityOk : Bool;   // TRUE = Qualität OK (ST5)
+      SizeMeasured : Bool;   // ST2 passiert
+      MaterialMeasured : Bool;   // ST3 passiert
+      WeightMeasured : Bool;   // ST4 passiert
+      QualityMeasured : Bool;   // ST5 passiert
+      Target : Int;   // TARGET_NONE .. TARGET_REJECT, festgelegt an ST5
+      RejectReason : Int;   // REJ_NONE .. REJ_SCALE_FAULT
+      TransitTime : Time;   // Zeit seit Einlauf, für Statistik (Durchlaufzeit)
+   END_STRUCT;
+
+END_TYPE

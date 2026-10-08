@@ -56,20 +56,32 @@ Stationen heißen `ST1`–`ST6`, damit sie nicht mit den Sensorkennungen `S1`–
 
 ## 4. Werkstück / Paket
 
-Datentyp `UDT_Workpiece`, gehalten in einem Array `Packages[1..5]`:
+Ein Paket wird zweimal geführt:
 
-| Feld     | Typ (Vorschlag) | Wertebereich                     |
-|----------|-----------------|----------------------------------|
-| ID       | DINT            | fortlaufend, eindeutig           |
-| Position | REAL            | 0–100 %                          |
-| Size     | Enum/INT        | Klein / Groß                     |
-| Material | Enum/INT        | Metall / Kunststoff              |
-| Weight   | REAL            | 0,2–8,0 kg                       |
-| Quality  | BOOL            | TRUE = OK, FALSE = Ausschuss     |
-| Target   | Enum/INT        | Ausgang 1–4                      |
-| Status   | Enum/INT        | siehe Abschnitt 8                |
+| Datentyp | Wer nutzt ihn | Inhalt |
+|---|---|---|
+| [`UDT_Workpiece`](../src/UDT/UDT_Workpiece.udt) | Steuerung, Array `Packages[1..MAX_PACKAGES]` | Was die Steuerung über die Sensoren **gemessen** hat, verfolgte Position, Status, Ziel, Ausschussgrund |
+| [`UDT_SimPackage`](../src/UDT/UDT_SimPackage.udt) | nur `FB_Simulation` | **Wahre** Eigenschaften und tatsächliche Position auf dem virtuellen Band |
 
-Ein eigenes Geschwindigkeitsfeld je Paket entfällt: Das Band läuft mit konstanter Geschwindigkeit, die Position ergibt sich daraus.
+Die Steuerung kennt die wahren Eigenschaften nicht, sondern erfährt sie nur über die Sensoren an ST2–ST5. So entspricht die Simulation einer echten Anlage, und Fehler der Paketverfolgung (Paket nicht dort, wo erwartet) lassen sich überhaupt erst erkennen.
+
+Felder von `UDT_Workpiece`:
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| ID | DInt | eindeutig, 0 = kein Paket |
+| Status | Int | `PKG_EMPTY` … `PKG_ERROR` (Abschnitt 8) |
+| Position | Real | verfolgte Position der Paketmitte, 0–100 % |
+| Size | Int | `SIZE_UNKNOWN` / `SIZE_SMALL` / `SIZE_LARGE` |
+| Material | Int | `MAT_UNKNOWN` / `MAT_METAL` / `MAT_PLASTIC` |
+| Weight | Real | gemessenes Gewicht in kg |
+| QualityOk | Bool | TRUE = Qualität OK |
+| SizeMeasured … QualityMeasured | Bool | Station ST2 … ST5 passiert |
+| Target | Int | `TARGET_NONE` … `TARGET_REJECT` |
+| RejectReason | Int | `REJ_NONE` … `REJ_SCALE_FAULT` |
+| TransitTime | Time | Zeit seit Einlauf, für die Statistik |
+
+Die Codes sind PLC-Konstanten, siehe [Constants.csv](../src/Constants/Constants.csv). Ein eigenes Geschwindigkeitsfeld je Paket entfällt, weil das Band mit konstanter Geschwindigkeit läuft.
 
 ## 5. Sortierregeln
 
@@ -219,7 +231,7 @@ OB1
 OB30 (100 ms) – Positionsfortschritt der Pakete und Simulationstakt
 ```
 
-Datentypen: `UDT_Workpiece`, `UDT_Conveyor`, `UDT_Sorter`, `UDT_Alarm`, `UDT_Statistics` sowie die zugehörigen Instanz- und Datenbausteine.
+Datentypen (Quellen in [src/UDT/](../src/UDT/)): `UDT_Workpiece`, `UDT_SimPackage`, `UDT_Conveyor`, `UDT_Sorter`, `UDT_Alarm`, `UDT_Statistics`, `UDT_IoInputs`, `UDT_IoOutputs` sowie die zugehörigen Instanz- und Datenbausteine.
 
 ## 11. HMI
 

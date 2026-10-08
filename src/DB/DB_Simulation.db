@@ -1,0 +1,40 @@
+DATA_BLOCK "DB_Simulation"
+TITLE = Simulation der Anlage
+{ S7_Optimized_Access := 'TRUE' }
+// Physische Pakete auf dem virtuellen Band, Einstellungen der Paketerzeugung
+// und gezielt auslösbare Störungen. Nur FB_Simulation und das HMI-Diagnosebild greifen darauf zu.
+VERSION : 0.1
+NON_RETAIN
+   VAR
+      Packages : Array[1.."MAX_PACKAGES"] of "UDT_SimPackage";
+      Settings : Struct
+         AutoGenerate : Bool := TRUE;   // TRUE = zufällige Pakete, FALSE = nur manuelle Erzeugung
+         GenerateInterval : Time := T#3S;   // Erzeugungsrate, zulässig 3..10 s
+      END_STRUCT;
+      ManualPackage : Struct   // Eingabemaske "Paket erzeugen"
+         Material : Int := 1;   // MAT_METAL / MAT_PLASTIC
+         Size : Int := 1;   // SIZE_SMALL / SIZE_LARGE
+         Weight : Real := 2.0;   // kg, 0,2..8,0
+         QualityOk : Bool := TRUE;
+         Generate : Bool;   // Taste "Paket erzeugen", wird nach Auswertung zurückgesetzt
+      END_STRUCT;
+      Faults : Struct   // Simulierte Störungen (Anlagenkonfiguration, Abschnitt 9)
+         SorterBlocked : Array[1.."SORTER_COUNT"] of Bool;   // Endlage ausgefahren wird nie erreicht
+         SorterStuck : Array[1.."SORTER_COUNT"] of Bool;   // Endlage eingefahren wird nicht wieder erreicht
+         SortEntrySensorDefect : Bool;   // S6 bleibt FALSE
+         MotorProtectTripped : Bool;   // B2 = FALSE
+         EmergencyStop : Bool;   // B1 = FALSE
+         ScaleDefect : Bool;   // S4 liefert 32767 (Überlauf)
+      END_STRUCT;
+      Internal : Struct   // Nur von FB_Simulation verwendet
+         NextId : DInt := 1;   // ID für das nächste simulierte Paket
+         RandomState : DWord := 16#2545F491;   // Zustand des Pseudozufallsgenerators, ungleich 0
+         GenerateTimer : Time;   // Zeit seit dem letzten erzeugten Paket
+         SorterPosition : Array[1.."SORTER_COUNT"] of Real;   // Kolbenstellung 0..100 %
+      END_STRUCT;
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK
