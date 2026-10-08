@@ -13,7 +13,8 @@ Eine simulierte Förderbandanlage transportiert Pakete, erkennt ihre Eigenschaft
 | Größe        | Klein / Groß |
 | Gewicht      | 0,2–8,0 kg |
 | Qualität     | OK / Ausschuss |
-| Förderband   | konstante Geschwindigkeit, Start/Stopp, Störung, virtuelle Paketposition |
+| Förderband   | 10 m, konstant 0,5 m/s, Start/Stopp, Störung, virtuelle Paketposition |
+| Paketabstand | mindestens 1,5 m (3 s) |
 | Simulation   | Zufallsgenerierung, manuelle Paketerzeugung über HMI, einstellbare Erzeugungsrate |
 | Steuerung    | Zustand je Paket statt einer globalen Schrittkette |
 
@@ -49,9 +50,9 @@ Die Stationen sind **ortsabhängig**: Jede Station liegt an einer festen Positio
 | ST3     | Material Metall / Kunststoff bestimmen    |
 | ST4     | Gewicht prüfen                            |
 | ST5     | Qualität prüfen, Ziel festlegen           |
-| ST6     | Sortierer betätigen, Paket ausleiten      |
+| ST6     | Sortierstrecke: Sortierer Q1–Q3, Ausschuss am Bandende |
 
-Stationen heißen `ST1`–`ST6`, damit sie nicht mit den Sensorkennungen `S1`–`S10` verwechselt werden. Positionen der Stationen in % werden mit der I/O-Liste festgelegt.
+Stationen heißen `ST1`–`ST6`, damit sie nicht mit den Sensorkennungen `S1`–`S16` verwechselt werden. Positionen, Sensoren und Zeiten stehen in der [Anlagenkonfiguration](Anlagenkonfiguration.md).
 
 ## 4. Werkstück / Paket
 
@@ -61,13 +62,14 @@ Datentyp `UDT_Workpiece`, gehalten in einem Array `Packages[1..5]`:
 |----------|-----------------|----------------------------------|
 | ID       | DINT            | fortlaufend, eindeutig           |
 | Position | REAL            | 0–100 %                          |
-| Speed    | REAL            | Bandgeschwindigkeit (konstant)   |
 | Size     | Enum/INT        | Klein / Groß                     |
 | Material | Enum/INT        | Metall / Kunststoff              |
 | Weight   | REAL            | 0,2–8,0 kg                       |
 | Quality  | BOOL            | TRUE = OK, FALSE = Ausschuss     |
 | Target   | Enum/INT        | Ausgang 1–4                      |
 | Status   | Enum/INT        | siehe Abschnitt 8                |
+
+Ein eigenes Geschwindigkeitsfeld je Paket entfällt: Das Band läuft mit konstanter Geschwindigkeit, die Position ergibt sich daraus.
 
 ## 5. Sortierregeln
 
@@ -105,22 +107,11 @@ ELSE
 END_IF;
 ```
 
-## 6. Sensoren (virtuell)
+## 6. Sensoren
 
-| Kennung | Funktion            |
-|---------|---------------------|
-| S1      | Paket am Einlauf    |
-| S2      | Position erreicht   |
-| S3      | Höhe / Größe        |
-| S4      | Metall erkannt      |
-| S5      | Qualitätsprüfung    |
-| S6      | Sortierposition     |
-| S7      | Paket Ausgang 1     |
-| S8      | Paket Ausgang 2     |
-| S9      | Paket Ausgang 3     |
-| S10     | Paket Ausschuss     |
+Vollständige Liste mit Typ, Signal und Adresse: [Anlagenkonfiguration, Abschnitt 3 und 5](Anlagenkonfiguration.md#3-sensoren).
 
-Zusätzliche Signale: Not-Halt, Förderband-Störung, Sortierer-Störung.
+Kurzfassung: S1–S6 an den Stationen, S4 als analoge Waage, S7–S10 an den Ausgängen, S11–S16 als Endlagen der Sortierer, dazu B1 Not-Halt und B2 Motorschutz.
 
 ## 7. Aktoren
 
@@ -130,9 +121,10 @@ Zusätzliche Signale: Not-Halt, Förderband-Störung, Sortierer-Störung.
 | Q1      | Sortierer 1 (Pneumatikzylinder, Ausgang 1)   |
 | Q2      | Sortierer 2 (Pneumatikzylinder, Ausgang 2)   |
 | Q3      | Sortierer 3 (Pneumatikzylinder, Ausgang 3)   |
-| Q4      | Ausschussklappe (Ausgang 4)                  |
 | H1      | Betriebsleuchte                              |
 | H2      | Störungsleuchte                              |
+
+Ausgang 4 (Ausschuss) liegt am Bandende und braucht keinen Aktor. Alles, was nicht ausgeschleust wird, landet dort (Fail-safe).
 
 ## 8. Paketstatus statt globaler Schrittkette
 
@@ -140,13 +132,17 @@ Weil bis zu fünf Pakete gleichzeitig unterwegs sind, gibt es **keine** globale 
 
 | Status     | Bedeutung                                   |
 |------------|---------------------------------------------|
+| EMPTY      | Platz im Array frei                         |
 | WAITING    | erzeugt, noch nicht auf dem Band            |
 | MOVING     | wird transportiert                          |
-| DETECTED   | an ST1 erkannt, ID vergeben                 |
+| DETECTED   | an ST1 erkannt                              |
 | INSPECTION | durchläuft ST2–ST5                          |
-| SORTING    | an ST6, Sortierer wird betätigt             |
+| SORTING    | Ziel bestimmt, auf der Sortierstrecke       |
 | SORTED     | an Ausgang 1–3 angekommen                   |
 | REJECTED   | an Ausgang 4 angekommen                     |
+| ERROR      | Paketverfolgung verloren                    |
+
+Zustandsdiagramme für Pakete und Anlage: [Anlagenkonfiguration, Abschnitt 6 und 7](Anlagenkonfiguration.md#6-anlagenzustand).
 
 Beispiel zu einem Zeitpunkt:
 
@@ -167,7 +163,6 @@ Start → Pakete erzeugen → Transport → Stationen ST1–ST5 → Sortierung a
 Der Bediener steuert am HMI einzeln:
 - Förderband EIN/AUS
 - Sortierer 1, 2, 3
-- Ausschussklappe
 - Paket erzeugen
 
 ### Simulation
@@ -211,13 +206,17 @@ Zuordnung zu Bausteinen:
 ```
 OB1
  └── FB_Main
-      ├── FB_Simulation   – Paketerzeugung (Zufall / manuell)
+      ├── FB_InputMapping – Eingänge aus %I oder Simulation nach DB_IO
+      ├── FB_Simulation   – Paketerzeugung (Zufall / manuell), simulierte Sensoren
       ├── FB_Conveyor     – Band, Positionsfortschritt aller Pakete
       ├── FB_Workpiece    – Paketstatus je Array-Eintrag
       ├── FB_Detection    – Stationen ST1–ST5
       ├── FB_Sorting      – Zielbestimmung, Sortierer an ST6
       ├── FB_Counters     – Statistik
-      └── FB_Alarms       – Störungen
+      ├── FB_Alarms       – Störungen
+      └── FB_OutputMapping – DB_IO nach %Q
+
+OB30 (100 ms) – Positionsfortschritt der Pakete und Simulationstakt
 ```
 
 Datentypen: `UDT_Workpiece`, `UDT_Conveyor`, `UDT_Sorter`, `UDT_Alarm`, `UDT_Statistics` sowie die zugehörigen Instanz- und Datenbausteine.
@@ -234,12 +233,7 @@ Datentypen: `UDT_Workpiece`, `UDT_Conveyor`, `UDT_Sorter`, `UDT_Alarm`, `UDT_Sta
 
 ## 12. Alarme
 
-- Förderband blockiert
-- Sortierer nicht zurückgefahren
-- Paket nicht erkannt
-- Timeout
-- Not-Halt
-- Sensorfehler
+Alarmliste mit Auslöser und Reaktion: [Anlagenkonfiguration, Abschnitt 8](Anlagenkonfiguration.md#8-alarme). Für Tests lassen sich Störungen in der Simulation gezielt auslösen (Abschnitt 9 dort).
 
 ## 13. Testfälle
 
@@ -256,13 +250,11 @@ Die Testfälle 001–009 werden über die manuelle Paketerzeugung angestoßen.
 | 007  | beliebig, OK, 6,0 kg                  | Ausgang 4 (zu schwer) |
 | 008  | beliebig, OK, 0,5 kg bzw. 5,0 kg      | nach Material/Größe (Grenzwerte gelten als OK) |
 | 009  | 6. Paket bei 5 aktiven Paketen        | wird nicht erzeugt    |
-| 010  | Sortierer blockiert                   | Störung, Band stoppt  |
-| 011  | Not-Halt                              | Anlage stoppt         |
+| 010  | Sortierer blockiert (simuliert)       | Alarm, Band stoppt    |
+| 011  | Sortierer klemmt beim Zurückfahren    | Alarm, Band stoppt    |
+| 012  | Lichtschranke S6 defekt (simuliert)   | Paket → ERROR, Band stoppt |
+| 013  | Not-Halt                              | Band aus, Sortierer fahren zurück |
 
 ## 14. Offene Punkte
 
-- **Konkrete Anlagenkonfiguration:** Positionen der Stationen ST1–ST6 und der Sensoren auf dem Band, Abstände, Bandlänge und Geschwindigkeit.
-- **Sensorliste angleichen:** Die Sensoren S1–S10 stammen aus dem ersten Entwurf. Für die Gewichtsstation ST4 fehlt noch ein Sensor (Waage).
-- **I/O-Liste:** Adressen der virtuellen Sensoren und Aktoren.
-- **Speed im Paket:** Bei konstanter Bandgeschwindigkeit ist `Speed` pro Paket redundant. Klären, ob das Feld bleibt (z. B. für spätere Staustrecken) oder entfällt.
-- **Mindestabstand:** Wie nah dürfen zwei Pakete aufeinander folgen? Davon hängt ab, ob ein Sortierer schon zurückgefahren ist, wenn das nächste Paket kommt.
+- **CPU-Typ:** S7-1200 oder S7-1500. Hängt von der TIA-Portal-Lizenz ab (STEP 7 Basic oder Professional). Die I/O-Adressen passen auf beide.

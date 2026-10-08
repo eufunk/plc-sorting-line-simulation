@@ -5,6 +5,12 @@
 - **Commit** nur nach umfangreichen Änderungen – keine Commits für Kleinigkeiten.
 - **Push** erst, wenn ein Thema abgeschlossen ist, das im aktuellen Plan unter `docs/Planung/` als erledigt markiert wurde.
 
+## TIA Portal und Repository
+
+- Das TIA-Portal-Projekt liegt **außerhalb** des Repositorys und außerhalb von OneDrive (z. B. `C:\TIA\SortingLine\`).
+- Ins Repository kommen nur exportierte Textquellen: SCL-Bausteine (`.scl`) und UDTs (`.udt`) unter `src/`.
+- Änderungen werden zwischen TIA-Projekt und `src/` per Export/Import der Quellen übertragen.
+
 ## Planung (`docs/Planung/`)
 
 - Jeden Tag wird ein neuer Plan angelegt: `docs/Planung/Plan_JJJJ-MM-TT.md`.
