@@ -61,8 +61,8 @@ Das TIA-Portal-Projekt selbst liegt **nicht** im Repository. Versioniert werden 
 | Phase | Inhalt | Status |
 |---|---|---|
 | 1 – Planung | Konzept, Spezifikation, Anlagenkonfiguration, I/O-Liste | ✅ abgeschlossen |
-| 2 – Datenmodell | UDTs und Datenbausteine | ⬜ offen |
-| 3 – SPS | Simulation, Förderband, Erkennung, Sortierung, Betriebsarten, Alarme | ⬜ offen |
+| 2 – Datenmodell | Konstanten, UDTs und Datenbausteine | ✅ abgeschlossen |
+| 3 – SPS | Simulation, Förderband, Erkennung, Sortierung, Betriebsarten, Alarme | 🔄 in Arbeit |
 | 4 – HMI | Übersicht, Bedienung, Paketdaten, Statistik, Diagnose, Alarme | ⬜ offen |
 | 5 – Test | Testfälle, Fehlerfälle, Dokumentation, Release v1.0 | ⬜ offen |
 

@@ -14,7 +14,7 @@
 ## Rechner
 
 - **Laptop** (Snapdragon, ARM64): Arbeit mit dem Repository, Import und Übersetzen in TIA Portal, Projekt archivieren. PLCSIM läuft hier nicht (siehe `docs/OpenIssues.md`, OI-001).
-- **Intel-Rechner:** archiviertes TIA-Projekt dearchivieren und mit PLCSIM testen.
+- **Gemietete Windows-VM** (Microsoft Azure): archiviertes TIA-Projekt laden und mit PLCSIM testen; wird erst eingerichtet, wenn alle Bausteine fehlerfrei übersetzen (siehe OI-001). Verworfen: lokaler Intel-Rechner (zu langsam), TIA Portal Cloud (nur gewerbliche Nutzung).
 
 ## Planung (`docs/Planung/`)
 

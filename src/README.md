@@ -22,15 +22,21 @@ Abhängigkeiten zuerst:
 4. **Funktionen und Funktionsbausteine** – aufgerufene vor aufrufenden: `FC_Random`, `FB_Simulation`, `FB_InputMapping`, `FB_OutputMapping`, zuletzt `FB_Main`
 5. **Organisationsbausteine** – siehe unten, OB30 wird von Hand angelegt
 
-## Konstanten anlegen
+## Konstanten und I/O-Variablen importieren
 
-`Constants/Constants.csv` enthält alle Anwenderkonstanten (Name, Datentyp, Wert, Kommentar).
+`Constants/Constants.csv` (Anwenderkonstanten) und `Tags/IoTags.csv` (Variablen mit Hardware-Adressen) werden nicht abgetippt, sondern als Excel-Datei importiert. Die Datei erzeugt ein Skript im Format des TIA-Exports:
 
-1. In TIA Portal unter *PLC-Variablen* eine neue Variablentabelle `Constants` anlegen.
-2. Register **Anwenderkonstanten** öffnen.
-3. Die Konstanten eintragen. Real-Werte immer mit Punkt schreiben (`2.0`, nicht `2,0`).
+```
+python tools/make_tag_import.py
+```
 
-Das genaue Importformat für Variablentabellen klären wir, sobald TIA Portal installiert ist: einmal eine Tabelle exportieren, dann kann die CSV in dieses Format umgewandelt und direkt importiert werden.
+Ergebnis: `C:\TIA\PlcTags_Import.xlsx` (außerhalb des Repositorys, wird bei jeder Änderung der CSVs neu erzeugt).
+
+1. In TIA Portal eine Variablentabelle öffnen, z. B. *PLC-Variablen → Constants*.
+2. In der Symbolleiste der Tabelle **Importieren** wählen, die Datei `PlcTags_Import.xlsx` auswählen.
+3. Beim Import **Variablen** und **Konstanten** ankreuzen. Ohne den Haken bei *Konstanten* werden nur die I/O-Variablen übernommen – ohne Fehlermeldung.
+4. TIA legt die Tabellen **Constants** (Konstanten) und **IO** (I/O-Variablen) an bzw. füllt sie.
+5. Testeinträge aus dem Formatexport (`TEST`, `iTest`) löschen.
 
 ## UDTs importieren
 

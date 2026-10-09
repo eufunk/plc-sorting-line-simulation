@@ -2,7 +2,7 @@
 
 ## OI-001: PLCSIM läuft nicht auf dem Entwicklungs-Laptop
 
-**Status:** Lösung gewählt (Intel-Rechner), Umsetzung läuft · **Erfasst:** 2026-10-09 · **Blockiert:** Tests ab Phase 3, HMI-Simulation in Phase 4
+**Status:** Lösung gewählt (Windows-VM bei Microsoft Azure), Einrichtung ausstehend · **Erfasst:** 2026-10-09 · **Blockiert:** Tests ab Phase 3, HMI-Simulation in Phase 4
 
 ### Befund
 
@@ -13,14 +13,15 @@
   - TIA Portal meldet im Dialog „Erweitertes Laden“: *Die gewählte Schnittstelle hat keine Netzwerkverbindung.*
 - Siemens unterstützt Windows auf ARM offiziell nicht.
 
-### Gewählte Lösung: zweiter Rechner mit Intel-Prozessor (2026-10-09)
+### Verworfen: zweiter Rechner mit Intel-Prozessor (2026-10-09)
 
-- **Laptop:** Repository, Quellen schreiben, in TIA importieren und übersetzen, Projekt archivieren (*Projekt → Archivieren*)
-- **Intel-Rechner (Core i3):** TIA Portal V21 + S7-PLCSIM V21, archiviertes Projekt dearchivieren und testen
-- Systemvoraussetzungen des Intel-Rechners noch zu prüfen (RAM, SSD, Windows-Edition)
-- S7-PLCSIM V21 auf dem Laptop deinstalliert (2026-10-09). TIA Portal, Automation License Manager und Npcap bleiben installiert.
+Der vorhandene Intel-Rechner (Core i3) ist für TIA Portal V21 mit PLCSIM zu langsam.
 
-### Ausweichoption: TIA Portal Cloud (Siemens)
+### Verworfen: TIA Portal Cloud (Siemens) (2026-10-09)
+
+Die TIA Cloud Services sind laut Nutzungsbedingungen nur für **gewerbliche Nutzung** im Namen einer Firma zugelassen. Für ein privates Lernprojekt nicht zulässig – Bedingungen wurden nicht akzeptiert.
+
+Ursprüngliche Bewertung:
 
 | | |
 |---|---|
@@ -30,7 +31,41 @@
 | Zu prüfen | ob **S7-PLCSIM** und die **WinCC-Runtime-Simulation** in der Cloud enthalten sind |
 | Hinweis | Erst aktivieren, wenn getestet werden soll – die 21 Tage laufen ab Aktivierung. Die Quellen aus `src/` lassen sich dort genauso importieren. |
 
-Weitere Alternativen, falls die Cloud nicht passt: anderer PC mit Intel/AMD-Prozessor, oder gemietete Windows-VM (Azure, AWS).
+Aus dem Siemens-Beitrag 109772248 (gelesen 2026-10-09):
+
+| Punkt | Bedeutung für uns |
+|---|---|
+| Aktivierung im TIA Cloud Services Hub: https://tiacloudservices.siemens.com/tia-portal-cloud/trials | Dort steht vermutlich, welche Pakete je Trial-Variante enthalten sind |
+| „Hauptpakete von TIA Portal sowie die wichtigsten Optionspakete“ | PLCSIM wird **nicht ausdrücklich** genannt – noch offen |
+| Kostenloser Cloud-Speicher (TIA Cloud Storage, 42 GB) | Projektarchiv vom Laptop hochladen und wieder herunterladen |
+| Session-Dauer max. **1 Stunde**, Instanz wird danach **gelöscht** | Jede Session startet frisch: Projekt aus dem Cloud-Speicher öffnen, laden, testen. Änderungen vor Ablauf in den Cloud-Speicher sichern. |
+| Kein Online-Zugriff auf lokale Hardware | Für uns egal, wir simulieren |
+| Nicht in allen Ländern verfügbar: https://tiacloudservices.siemens.com/rolled-out | Prüfen, ob Deutschland freigeschaltet ist |
+| Schritt-für-Schritt-Anleitung: Beitrag **109823581**, Applikationshandbuch: Beitrag **110000000** | Dort nach PLCSIM suchen |
+
+### Gewählte Lösung: gemietete Windows-VM bei Microsoft Azure (2026-10-09)
+
+Einrichten erst, wenn alle Bausteine auf dem Laptop fehlerfrei übersetzen – so laufen weder VM-Kosten noch die 21-Tage-Trial unnötig.
+
+| Punkt | Plan |
+|---|---|
+| Anbieter | **Microsoft Azure** (gewählt 2026-10-09): Windows-Standardfall, Portal auf Deutsch, RDP-Datei per Klick, eingebautes Auto-Shutdown. AWS wäre möglich, ist aber umständlicher (Schlüsselpaar für das Windows-Passwort, Konsole teils nur Englisch). Aktuelle Preise und Startguthaben für Neukunden beim Einrichten prüfen. |
+| Image | **Windows Server 2022 Datacenter** – Windows-Lizenz im Preis enthalten (Windows 11 bräuchte in Azure eine eigene, passende Lizenz). Vorher in der Liesmich der TIA-ISO prüfen, ob Windows Server 2022 unterstützt wird. |
+| Größe | z. B. **D4s_v5**: 4 vCPU, 16 GB RAM; 128 GB SSD |
+| Kostenschutz | **Auto-Shutdown** beim Erstellen aktivieren (z. B. täglich 22:00, VM wird dabei freigegeben) und ein **Budget mit E-Mail-Alarm** anlegen (z. B. 20 €) |
+| Zugriff | Remotedesktop (RDP) vom Laptop – läuft auch auf ARM |
+| Software | TIA Portal V21 + S7-PLCSIM V21 (ISOs per Download direkt in der VM), eigene 21-Tage-Trial |
+| Projekt übertragen | Archiv `.zap21` über OneDrive oder Kopieren per RDP; entpacken in der VM nach `C:\TIA\` |
+| Kosten sparen | VM nach jedem Test **stoppen und freigeben** (deallocate) – dann fällt nur der Speicher an |
+| Zu prüfen | PLCSIM V21 startet in der VM (virtuelle CPU) – erster Test direkt nach der Installation |
+
+### Weitere Optionen (nicht gewählt)
+
+| Option | Bewertung |
+|---|---|
+| **Gemietete Windows-VM** mit Intel/AMD-Prozessor (z. B. Microsoft Azure, AWS) | Privat nutzbar, Windows-Lizenz im Mietpreis enthalten. Empfehlung: 4 vCPU, 16 GB RAM, 128 GB SSD. Kosten fallen nur an, solange die VM läuft (nach dem Test **stoppen/freigeben**); dazu ein kleiner Betrag für den Speicher. TIA Portal + PLCSIM dort installieren, eigene 21-Tage-Trial. |
+| **Siemens SCE** über eine Bildungseinrichtung | Nur, falls die Weiterbildung über Schule, Hochschule oder Bildungsträger läuft |
+| **Leistungsstärkerer Intel/AMD-PC** (geliehen, Kurs, Bekannte) | Keine laufenden Kosten, abhängig von Verfügbarkeit |
 
 ### Vorgehen bis zur Lösung
 
