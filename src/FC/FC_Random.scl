@@ -1,0 +1,35 @@
+FUNCTION "FC_Random" : Real
+TITLE = Pseudozufallszahl 0.0 <= r < 1.0
+{ S7_Optimized_Access := 'TRUE' }
+// Xorshift32-Generator. Der Zustand (State) liegt beim Aufrufer, z. B. in DB_Simulation.Internal.RandomState.
+// Gleicher Startwert ergibt die gleiche Zahlenfolge -> Simulationsläufe sind reproduzierbar.
+// Für das Ergebnis werden nur die unteren 24 Bit verwendet, das entspricht der Genauigkeit von Real.
+VERSION : 0.1
+   VAR_IN_OUT
+      State : DWord;   // Zustand des Generators, wird bei jedem Aufruf weitergeschaltet
+   END_VAR
+
+   VAR_TEMP
+      x : DWord;
+   END_VAR
+
+   VAR CONSTANT
+      SEED_DEFAULT : DWord := 16#2545F491;   // Ersatz-Startwert, denn State = 0 bliebe immer 0
+      MASK_24BIT : DWord := 16#00FFFFFF;
+      RANGE_24BIT : Real := 16777216.0;   // 2^24
+   END_VAR
+
+
+BEGIN
+	#x := #State;
+	IF #x = 0 THEN
+	    #x := #SEED_DEFAULT;
+	END_IF;
+
+	#x := #x XOR SHL(IN := #x, N := 13);
+	#x := #x XOR SHR(IN := #x, N := 17);
+	#x := #x XOR SHL(IN := #x, N := 5);
+
+	#State := #x;
+	#FC_Random := UDINT_TO_REAL(DWORD_TO_UDINT(#x AND #MASK_24BIT)) / #RANGE_24BIT;
+END_FUNCTION

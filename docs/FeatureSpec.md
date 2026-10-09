@@ -216,20 +216,20 @@ In beiden Modi wird kein neues Paket erzeugt, solange bereits fünf Pakete aktiv
 Zuordnung zu Bausteinen:
 
 ```
-OB1
- └── FB_Main
-      ├── FB_InputMapping – Eingänge aus %I oder Simulation nach DB_IO
-      ├── FB_Simulation   – Paketerzeugung (Zufall / manuell), simulierte Sensoren
-      ├── FB_Conveyor     – Band, Positionsfortschritt aller Pakete
-      ├── FB_Workpiece    – Paketstatus je Array-Eintrag
-      ├── FB_Detection    – Stationen ST1–ST5
-      ├── FB_Sorting      – Zielbestimmung, Sortierer an ST6
-      ├── FB_Counters     – Statistik
-      ├── FB_Alarms       – Störungen
-      └── FB_OutputMapping – DB_IO nach %Q
-
-OB30 (100 ms) – Positionsfortschritt der Pakete und Simulationstakt
+OB30 (Weckalarm 100 ms)  – gesamtes Anlagenprogramm, OB1 bleibt leer
+ └── FB_Main (IDB_Main)
+      ├── FB_Simulation    – Paketerzeugung (Zufall / manuell), simulierte Sensoren
+      ├── FB_InputMapping  – Eingänge aus Hardware oder Simulation nach DB_IO.Inputs
+      ├── FB_Plant         – Anlagenzustand, Betriebsarten
+      ├── FB_Conveyor      – Förderband
+      ├── FB_Detection     – Paketverfolgung, Stationen ST1–ST5
+      ├── FB_Sorting       – Zielbestimmung, Sortierer an ST6
+      ├── FB_Alarms        – Störungen
+      ├── FB_Counters      – Statistik
+      └── FB_OutputMapping – DB_IO.Outputs auf die Hardware (im Simulationsbetrieb alle AUS)
 ```
+
+Alles läuft in einem festen 100-ms-Takt: Jeder Durchlauf entspricht 0,5 % Bandweg. Es gibt keine Überschneidungen zwischen OB1 und einem Weckalarm, und die Simulation ist reproduzierbar.
 
 Datentypen (Quellen in [src/UDT/](../src/UDT/)): `UDT_Workpiece`, `UDT_SimPackage`, `UDT_Conveyor`, `UDT_Sorter`, `UDT_Alarm`, `UDT_Statistics`, `UDT_IoInputs`, `UDT_IoOutputs` sowie die zugehörigen Instanz- und Datenbausteine.
 

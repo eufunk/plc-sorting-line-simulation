@@ -5,10 +5,10 @@ TITLE = Paket aus Sicht der Simulation
 // Die Steuerlogik greift nie darauf zu, sondern nur auf UDT_Workpiece.
 VERSION : 0.1
    STRUCT
-      Active : Bool;   // TRUE = Paket existiert (wartend, auf dem Band oder in der Rutsche)
+      Active : Bool;   // TRUE = Paket existiert (auf dem Band oder in der Rutsche)
       ID : DInt;   // ID zur Zuordnung in Diagnose und Tests
       Position : Real;   // Tatsächliche Position der Paketmitte in %
-      OnBelt : Bool;   // FALSE = wartet am Einlauf oder wurde ausgeschleust
+      OnBelt : Bool;   // TRUE = auf dem Band, FALSE = ausgeschleust (in der Rutsche)
       Size : Int;   // SIZE_SMALL / SIZE_LARGE
       Material : Int;   // MAT_METAL / MAT_PLASTIC
       Weight : Real;   // Gewicht in kg (0,2..8,0)

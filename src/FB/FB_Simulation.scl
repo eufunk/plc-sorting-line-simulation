@@ -1,0 +1,280 @@
+FUNCTION_BLOCK "FB_Simulation"
+TITLE = Simulation von Paketen, Förderband, Sortierern und Sensoren
+{ S7_Optimized_Access := 'TRUE' }
+// Ersetzt die reale Anlage. Pro Aufruf (100 ms):
+//   1. Einstellungen prüfen
+//   2. Sortierer: Kolben bewegen, Endlagen bilden
+//   3. Pakete: auf dem Band bewegen, ausschleusen, in der Rutsche ablegen
+//   4. Paketerzeugung: zufällig (Auto) oder über die Eingabemaske (manuell)
+//   5. Sensoren: aus den Paketpositionen die Eingangssignale bilden -> SimInputs
+// Gelesen werden nur die Ausgänge der Steuerung (Outputs). Pakete, Einstellungen und
+// simulierte Störungen stehen in DB_Simulation.
+// Positionen, Abstände und Zeiten: docs/Anlagenkonfiguration.md
+VERSION : 0.1
+   VAR_IN_OUT
+      Outputs : "UDT_IoOutputs";   // Ansteuerung durch die Steuerung (Band, Sortierer)
+      SimInputs : "UDT_IoInputs";   // Ergebnis: simulierte Sensorsignale
+   END_VAR
+
+   VAR_TEMP
+      i : Int;   // Paketindex
+      s : Int;   // Sortiererindex
+      beltMoving : Bool;   // Band bewegt sich tatsächlich
+      beltStep : Real;   // Bandvorschub pro Durchlauf in %
+      strokeStep : Real;   // Kolbenweg pro Durchlauf in %
+      valveOn : Bool;   // Ventil des Sortierers bestromt
+      stroke : Real;   // Kolbenstellung 0..100 %
+      pos : Real;   // Paketposition in %
+      sorterPos : Array[1.."SORTER_COUNT"] of Real;   // Position der Sortierer auf dem Band in %
+      infeedClear : Bool;   // Einlauf frei: kein Paket innerhalb MIN_GAP
+      freeSlot : Int;   // Freier Platz im Paket-Array, 0 = keiner
+      isManual : Bool;   // Manuelle Paketerzeugung angefordert
+      r : Real;   // Zufallszahl 0..1
+      inputs : "UDT_IoInputs";   // Sensorsignale, werden am Ende nach SimInputs kopiert
+   END_VAR
+
+   VAR CONSTANT
+      P_METAL : Real := 0.5;   // Anteil Metall
+      P_LARGE : Real := 0.5;   // Anteil groß
+      P_QUALITY_OK : Real := 0.9;   // Anteil Qualität OK
+      P_UNDERWEIGHT : Real := 0.1;   // Anteil zu leicht (< WEIGHT_MIN)
+      P_OVERWEIGHT : Real := 0.1;   // Anteil zu schwer (> WEIGHT_MAX)
+      OVERWEIGHT_MARGIN : Real := 0.1;   // kg Abstand zur Grenze, damit "zu schwer" eindeutig ist
+      SORTER_CONTACT : Real := 50.0;   // Kolbenstellung in %, ab der ein Paket vom Band geschoben wird
+      SORTER_BLOCKED_POS : Real := 30.0;   // Störung "blockiert": Kolben bleibt hier stehen
+      ENDPOS_TOLERANCE : Real := 0.5;   // Endlagenschalter schaltet innerhalb dieser Toleranz in %
+      EXIT_SENSOR_ON : Time := T#300MS;   // Ausgangs-Lichtschranke: Paket erreicht sie nach dieser Zeit
+      EXIT_SENSOR_OFF : Time := T#600MS;   // ... und hat sie nach dieser Zeit passiert
+      EXIT_REMOVE : Time := T#1S;   // Danach ist das Paket aus der Simulation entfernt
+      SCALE_OVERFLOW : Int := 32767;   // Rohwert der Waage bei Störung "Waage defekt"
+   END_VAR
+
+
+BEGIN
+	REGION 1. Einstellungen prüfen
+	    IF "DB_Simulation".Settings.GenerateInterval < "SIM_INTERVAL_MIN" THEN
+	        "DB_Simulation".Settings.GenerateInterval := "SIM_INTERVAL_MIN";
+	    ELSIF "DB_Simulation".Settings.GenerateInterval > "SIM_INTERVAL_MAX" THEN
+	        "DB_Simulation".Settings.GenerateInterval := "SIM_INTERVAL_MAX";
+	    END_IF;
+
+	    #sorterPos[1] := "POS_SORTER1";
+	    #sorterPos[2] := "POS_SORTER2";
+	    #sorterPos[3] := "POS_SORTER3";
+
+	    // Not-Halt und Motorschutz halten das Band an
+	    #beltMoving := #Outputs.Conveyor
+	                   AND NOT "DB_Simulation".Faults.EmergencyStop
+	                   AND NOT "DB_Simulation".Faults.MotorProtectTripped;
+	    #beltStep := "BELT_SPEED" * "CYCLE_SEC";
+	END_REGION
+
+	REGION 2. Sortierer
+	    // Voller Hub (0 -> 100 %) dauert SIM_SORTER_MOVE_TIME
+	    #strokeStep := 100.0 * "CYCLE_SEC" * 1000.0 / DINT_TO_REAL(TIME_TO_DINT("SIM_SORTER_MOVE_TIME"));
+
+	    FOR #s := 1 TO "SORTER_COUNT" DO
+	        // Not-Halt schaltet die Ventile stromlos, die Federn fahren die Kolben zurück
+	        #valveOn := #Outputs.SorterExtend[#s] AND NOT "DB_Simulation".Faults.EmergencyStop;
+	        #stroke := "DB_Simulation".Internal.SorterPosition[#s];
+
+	        IF #valveOn THEN
+	            #stroke := #stroke + #strokeStep;
+	            IF "DB_Simulation".Faults.SorterBlocked[#s] AND #stroke > #SORTER_BLOCKED_POS THEN
+	                #stroke := #SORTER_BLOCKED_POS;
+	            END_IF;
+	        ELSIF NOT "DB_Simulation".Faults.SorterStuck[#s] THEN
+	            #stroke := #stroke - #strokeStep;
+	        END_IF;
+
+	        #stroke := LIMIT(MN := 0.0, IN := #stroke, MX := 100.0);
+	        "DB_Simulation".Internal.SorterPosition[#s] := #stroke;
+
+	        #inputs.SorterRetracted[#s] := #stroke <= #ENDPOS_TOLERANCE;
+	        #inputs.SorterExtended[#s] := #stroke >= 100.0 - #ENDPOS_TOLERANCE;
+	    END_FOR;
+	END_REGION
+
+	REGION 3. Pakete bewegen und ausschleusen
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        IF "DB_Simulation".Packages[#i].Active THEN
+	            IF "DB_Simulation".Packages[#i].OnBelt THEN
+	                IF #beltMoving THEN
+	                    "DB_Simulation".Packages[#i].Position := "DB_Simulation".Packages[#i].Position + #beltStep;
+	                END_IF;
+	                #pos := "DB_Simulation".Packages[#i].Position;
+
+	                // Ein Sortierer, der vor dem Paket weit genug ausgefahren ist, schiebt es in seinen Ausgang
+	                FOR #s := 1 TO "SORTER_COUNT" DO
+	                    IF "DB_Simulation".Packages[#i].OnBelt
+	                        AND ABS(#pos - #sorterPos[#s]) <= "SENSOR_WINDOW"
+	                        AND "DB_Simulation".Internal.SorterPosition[#s] >= #SORTER_CONTACT
+	                    THEN
+	                        "DB_Simulation".Packages[#i].OnBelt := FALSE;
+	                        "DB_Simulation".Packages[#i].Exit := #s;
+	                        "DB_Simulation".Packages[#i].ExitTimer := T#0S;
+	                    END_IF;
+	                END_FOR;
+
+	                // Nicht ausgeschleust: fällt am Bandende in den Ausschuss
+	                IF "DB_Simulation".Packages[#i].OnBelt AND #pos >= "POS_BELT_END" THEN
+	                    "DB_Simulation".Packages[#i].OnBelt := FALSE;
+	                    "DB_Simulation".Packages[#i].Exit := "TARGET_REJECT";
+	                    "DB_Simulation".Packages[#i].ExitTimer := T#0S;
+	                END_IF;
+	            ELSE
+	                // In der Rutsche: läuft an der Ausgangs-Lichtschranke vorbei und wird dann entfernt
+	                "DB_Simulation".Packages[#i].ExitTimer := "DB_Simulation".Packages[#i].ExitTimer + "CYCLE_TIME";
+	                IF "DB_Simulation".Packages[#i].ExitTimer >= #EXIT_REMOVE THEN
+	                    "DB_Simulation".Packages[#i].Active := FALSE;
+	                END_IF;
+	            END_IF;
+	        END_IF;
+	    END_FOR;
+	END_REGION
+
+	REGION 4. Paketerzeugung
+	    // Neues Paket nur, wenn ein Platz frei ist und der Einlauf frei ist (Mindestabstand)
+	    #infeedClear := TRUE;
+	    #freeSlot := 0;
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        IF "DB_Simulation".Packages[#i].Active THEN
+	            IF "DB_Simulation".Packages[#i].OnBelt AND "DB_Simulation".Packages[#i].Position < "MIN_GAP" THEN
+	                #infeedClear := FALSE;
+	            END_IF;
+	        ELSIF #freeSlot = 0 THEN
+	            #freeSlot := #i;
+	        END_IF;
+	    END_FOR;
+
+	    IF "DB_Simulation".Settings.AutoGenerate THEN
+	        IF "DB_Simulation".Internal.GenerateTimer < "DB_Simulation".Settings.GenerateInterval THEN
+	            "DB_Simulation".Internal.GenerateTimer := "DB_Simulation".Internal.GenerateTimer + "CYCLE_TIME";
+	        END_IF;
+	    ELSE
+	        "DB_Simulation".Internal.GenerateTimer := T#0S;
+	    END_IF;
+
+	    // Eine manuelle Anforderung bleibt stehen, bis das Paket erzeugt werden konnte
+	    #isManual := "DB_Simulation".ManualPackage.Generate;
+
+	    IF (#isManual
+	        OR ("DB_Simulation".Settings.AutoGenerate
+	            AND "DB_Simulation".Internal.GenerateTimer >= "DB_Simulation".Settings.GenerateInterval))
+	        AND #infeedClear AND #freeSlot > 0
+	    THEN
+	        "DB_Simulation".Packages[#freeSlot].Active := TRUE;
+	        "DB_Simulation".Packages[#freeSlot].ID := "DB_Simulation".Internal.NextId;
+	        "DB_Simulation".Packages[#freeSlot].Position := 0.0;
+	        "DB_Simulation".Packages[#freeSlot].OnBelt := TRUE;
+	        "DB_Simulation".Packages[#freeSlot].Exit := 0;
+	        "DB_Simulation".Packages[#freeSlot].ExitTimer := T#0S;
+	        "DB_Simulation".Internal.NextId := "DB_Simulation".Internal.NextId + 1;
+
+	        IF #isManual THEN
+	            // Werte aus der Eingabemaske, ungültige Eingaben werden korrigiert
+	            IF "DB_Simulation".ManualPackage.Material = "MAT_PLASTIC" THEN
+	                "DB_Simulation".Packages[#freeSlot].Material := "MAT_PLASTIC";
+	            ELSE
+	                "DB_Simulation".Packages[#freeSlot].Material := "MAT_METAL";
+	            END_IF;
+	            IF "DB_Simulation".ManualPackage.Size = "SIZE_LARGE" THEN
+	                "DB_Simulation".Packages[#freeSlot].Size := "SIZE_LARGE";
+	            ELSE
+	                "DB_Simulation".Packages[#freeSlot].Size := "SIZE_SMALL";
+	            END_IF;
+	            "DB_Simulation".Packages[#freeSlot].Weight := LIMIT(MN := "SIM_WEIGHT_MIN",
+	                                                               IN := "DB_Simulation".ManualPackage.Weight,
+	                                                               MX := "SIM_WEIGHT_MAX");
+	            "DB_Simulation".Packages[#freeSlot].QualityOk := "DB_Simulation".ManualPackage.QualityOk;
+	            "DB_Simulation".ManualPackage.Generate := FALSE;
+	        ELSE
+	            // Zufällige Eigenschaften
+	            #r := "FC_Random"(State := "DB_Simulation".Internal.RandomState);
+	            IF #r < #P_METAL THEN
+	                "DB_Simulation".Packages[#freeSlot].Material := "MAT_METAL";
+	            ELSE
+	                "DB_Simulation".Packages[#freeSlot].Material := "MAT_PLASTIC";
+	            END_IF;
+
+	            #r := "FC_Random"(State := "DB_Simulation".Internal.RandomState);
+	            IF #r < #P_LARGE THEN
+	                "DB_Simulation".Packages[#freeSlot].Size := "SIZE_LARGE";
+	            ELSE
+	                "DB_Simulation".Packages[#freeSlot].Size := "SIZE_SMALL";
+	            END_IF;
+
+	            // Gewicht: meist im Gutbereich, einige zu leicht oder zu schwer
+	            #r := "FC_Random"(State := "DB_Simulation".Internal.RandomState);
+	            IF #r < #P_UNDERWEIGHT THEN
+	                "DB_Simulation".Packages[#freeSlot].Weight := "SIM_WEIGHT_MIN"
+	                    + "FC_Random"(State := "DB_Simulation".Internal.RandomState) * ("WEIGHT_MIN" - "SIM_WEIGHT_MIN");
+	            ELSIF #r < #P_UNDERWEIGHT + #P_OVERWEIGHT THEN
+	                "DB_Simulation".Packages[#freeSlot].Weight := "WEIGHT_MAX" + #OVERWEIGHT_MARGIN
+	                    + "FC_Random"(State := "DB_Simulation".Internal.RandomState) * ("SIM_WEIGHT_MAX" - "WEIGHT_MAX" - #OVERWEIGHT_MARGIN);
+	            ELSE
+	                "DB_Simulation".Packages[#freeSlot].Weight := "WEIGHT_MIN"
+	                    + "FC_Random"(State := "DB_Simulation".Internal.RandomState) * ("WEIGHT_MAX" - "WEIGHT_MIN");
+	            END_IF;
+
+	            #r := "FC_Random"(State := "DB_Simulation".Internal.RandomState);
+	            "DB_Simulation".Packages[#freeSlot].QualityOk := #r < #P_QUALITY_OK;
+
+	            "DB_Simulation".Internal.GenerateTimer := T#0S;
+	        END_IF;
+	    END_IF;
+	END_REGION
+
+	REGION 5. Sensoren
+	    #inputs.EmergencyStopOk := NOT "DB_Simulation".Faults.EmergencyStop;
+	    #inputs.MotorProtectOk := NOT "DB_Simulation".Faults.MotorProtectTripped;
+	    #inputs.Infeed := FALSE;
+	    #inputs.SizeLarge := FALSE;
+	    #inputs.Metal := FALSE;
+	    #inputs.QualityOk := FALSE;
+	    #inputs.SortEntry := FALSE;
+	    #inputs.WeightRaw := 0;
+	    FOR #s := 1 TO 4 DO
+	        #inputs.Exit[#s] := FALSE;
+	    END_FOR;
+
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        IF "DB_Simulation".Packages[#i].Active THEN
+	            IF "DB_Simulation".Packages[#i].OnBelt THEN
+	                #pos := "DB_Simulation".Packages[#i].Position;
+
+	                IF ABS(#pos - "POS_ST1") <= "SENSOR_WINDOW" THEN
+	                    #inputs.Infeed := TRUE;
+	                END_IF;
+	                IF ABS(#pos - "POS_ST2") <= "SENSOR_WINDOW" AND "DB_Simulation".Packages[#i].Size = "SIZE_LARGE" THEN
+	                    #inputs.SizeLarge := TRUE;
+	                END_IF;
+	                IF ABS(#pos - "POS_ST3") <= "SENSOR_WINDOW" AND "DB_Simulation".Packages[#i].Material = "MAT_METAL" THEN
+	                    #inputs.Metal := TRUE;
+	                END_IF;
+	                IF ABS(#pos - "POS_ST4") <= "SENSOR_WINDOW" THEN
+	                    #inputs.WeightRaw := REAL_TO_INT("DB_Simulation".Packages[#i].Weight / "SCALE_KG_MAX" * INT_TO_REAL("SCALE_RAW_MAX"));
+	                END_IF;
+	                IF ABS(#pos - "POS_ST5") <= "SENSOR_WINDOW" AND "DB_Simulation".Packages[#i].QualityOk THEN
+	                    #inputs.QualityOk := TRUE;
+	                END_IF;
+	                IF ABS(#pos - "POS_S6") <= "SENSOR_WINDOW" AND NOT "DB_Simulation".Faults.SortEntrySensorDefect THEN
+	                    #inputs.SortEntry := TRUE;
+	                END_IF;
+	            ELSIF "DB_Simulation".Packages[#i].Exit >= 1 AND "DB_Simulation".Packages[#i].Exit <= 4 THEN
+	                IF "DB_Simulation".Packages[#i].ExitTimer >= #EXIT_SENSOR_ON
+	                    AND "DB_Simulation".Packages[#i].ExitTimer < #EXIT_SENSOR_OFF
+	                THEN
+	                    #inputs.Exit["DB_Simulation".Packages[#i].Exit] := TRUE;
+	                END_IF;
+	            END_IF;
+	        END_IF;
+	    END_FOR;
+
+	    IF "DB_Simulation".Faults.ScaleDefect THEN
+	        #inputs.WeightRaw := #SCALE_OVERFLOW;
+	    END_IF;
+
+	    #SimInputs := #inputs;
+	END_REGION
+END_FUNCTION_BLOCK

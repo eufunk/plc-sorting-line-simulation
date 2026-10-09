@@ -1,0 +1,16 @@
+ORGANIZATION_BLOCK "OB_Cyclic100ms"
+TITLE = Weckalarm 100 ms
+{ S7_Optimized_Access := 'TRUE' }
+// Weckalarm-OB (Cyclic interrupt), Nummer 30, Taktzeit 100 ms (100000 µs).
+// Das gesamte Anlagenprogramm läuft hier, damit jeder Durchlauf genau 100 ms entspricht
+// (Bandvorschub 0,5 % pro Durchlauf). Main [OB1] bleibt leer.
+//
+// Anlegen in TIA Portal (der OB-Typ lässt sich über eine Quelle nicht sicher festlegen):
+//   Neuen Baustein hinzufügen -> Organisationsbaustein -> Cyclic interrupt
+//   Name: OB_Cyclic100ms, Nummer: 30, Taktzeit: 100000 µs, Sprache: SCL
+//   Dann die Zeile unter BEGIN einfügen. Den Instanz-DB IDB_Main legt TIA beim Übersetzen an.
+VERSION : 0.1
+
+BEGIN
+	"IDB_Main"();
+END_ORGANIZATION_BLOCK

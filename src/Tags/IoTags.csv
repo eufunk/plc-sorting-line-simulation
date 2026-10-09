@@ -1,0 +1,25 @@
+Name;Datentyp;Adresse;Kommentar
+iEmergencyStopOk;Bool;%I0.0;B1 Not-Halt nicht betätigt (Öffner)
+iMotorProtectOk;Bool;%I0.1;B2 Motorschutz M1 OK
+iInfeed;Bool;%I0.2;S1 Paket am Einlauf
+iSizeLarge;Bool;%I0.3;S2 Paket groß
+iMetal;Bool;%I0.4;S3 Metall erkannt
+iQualityOk;Bool;%I0.5;S5 Qualität OK
+iSortEntry;Bool;%I0.6;S6 Paket am Beginn der Sortierstrecke
+iExit1;Bool;%I0.7;S7 Paket in Ausgang 1
+iExit2;Bool;%I1.0;S8 Paket in Ausgang 2
+iExit3;Bool;%I1.1;S9 Paket in Ausgang 3
+iExitReject;Bool;%I1.2;S10 Paket in Ausschuss
+iSorter1Retracted;Bool;%I1.3;S11 Sortierer 1 eingefahren
+iSorter1Extended;Bool;%I1.4;S12 Sortierer 1 ausgefahren
+iSorter2Retracted;Bool;%I1.5;S13 Sortierer 2 eingefahren
+iSorter2Extended;Bool;%I1.6;S14 Sortierer 2 ausgefahren
+iSorter3Retracted;Bool;%I1.7;S15 Sortierer 3 eingefahren
+iSorter3Extended;Bool;%I2.0;S16 Sortierer 3 ausgefahren
+iWeightRaw;Int;%IW64;S4 Waage 0..27648 = 0..10 kg
+qConveyor;Bool;%Q0.0;M1 Förderband EIN
+qSorter1;Bool;%Q0.1;Q1 Sortierer 1 ausfahren
+qSorter2;Bool;%Q0.2;Q2 Sortierer 2 ausfahren
+qSorter3;Bool;%Q0.3;Q3 Sortierer 3 ausfahren
+qLampRun;Bool;%Q0.4;H1 Betriebsleuchte
+qLampFault;Bool;%Q0.5;H2 Störungsleuchte

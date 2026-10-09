@@ -7,15 +7,20 @@ Exportierte Textquellen des SPS-Programms. Das TIA-Portal-Projekt selbst liegt a
 | `Constants/` | PLC-Konstanten (Anwenderkonstanten) als CSV |
 | `UDT/`       | PLC-Datentypen (`.udt`) |
 | `DB/`        | Globale Datenbausteine (`.db`) |
+| `Tags/`      | PLC-Variablen mit Hardware-Adressen (I/O-Liste) als CSV |
+| `FC/`        | Funktionen (`.scl`) |
+| `FB/`        | Funktionsbausteine (`.scl`) |
+| `OB/`        | Organisationsbausteine (`.scl`) |
 
 ## Import-Reihenfolge
 
 Abhängigkeiten zuerst:
 
-1. **Konstanten** – UDTs und Bausteine verwenden sie.
+1. **Konstanten** und **I/O-Variablen** – UDTs und Bausteine verwenden sie.
 2. **UDTs**
-3. **Datenbausteine** (ab Phase 2)
-4. **Funktionsbausteine** (ab Phase 3)
+3. **Datenbausteine**
+4. **Funktionen und Funktionsbausteine** – aufgerufene vor aufrufenden: `FC_Random`, `FB_Simulation`, `FB_InputMapping`, `FB_OutputMapping`, zuletzt `FB_Main`
+5. **Organisationsbausteine** – siehe unten, OB30 wird von Hand angelegt
 
 ## Konstanten anlegen
 
@@ -45,6 +50,21 @@ Wie bei den UDTs: `.db`-Dateien unter *Externe Quellen* hinzufügen → *Baustei
 | `DB_Statistics` | Zähler und Kennzahlen | ja |
 | `DB_Hmi` | Tasten und Eingaben vom Bedienpanel | nein |
 | `DB_Simulation` | simulierte Pakete, Erzeugung, Störungen | nein |
+
+## Funktionsbausteine importieren
+
+Wie UDTs und DBs: `.scl`-Dateien unter *Externe Quellen* hinzufügen → *Bausteine aus Quelle generieren*.
+
+## OB30 anlegen
+
+Den Typ eines Organisationsbausteins legt eine Quelle nicht sicher fest. Deshalb von Hand:
+
+1. *Programmbausteine* → *Neuen Baustein hinzufügen* → *Organisationsbaustein* → **Cyclic interrupt**
+2. Name `OB_Cyclic100ms`, Nummer **30**, Taktzeit **100000 µs**, Sprache **SCL**
+3. Inhalt aus `OB/OB_Cyclic100ms.scl` übernehmen: die Zeile `"IDB_Main"();`
+4. Übersetzen – TIA legt den Instanz-DB `IDB_Main` an (Abfrage bestätigen).
+
+`Main [OB1]` bleibt leer: Das gesamte Programm läuft im 100-ms-Takt von OB30.
 
 ## Nach Änderungen in TIA Portal
 

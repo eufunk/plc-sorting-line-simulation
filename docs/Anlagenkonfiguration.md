@@ -17,7 +17,7 @@ Konkrete Auslegung der Anlage auf Basis der [FeatureSpec](FeatureSpec.md). Diese
 
 Die Paketposition bezieht sich auf die **Paketmitte**. Ein Sensor gilt als belegt, solange die Paketmitte im Bereich ±2 % um die Sensorposition liegt (halbe Paketlänge).
 
-**Takt:** Positionsfortschritt und Simulation laufen in einem Weckalarm-OB (Vorschlag: OB30, 100 ms). Pro Aufruf wandert ein Paket um 0,5 % weiter. Damit ist die Bewegung unabhängig von der schwankenden OB1-Zykluszeit.
+**Takt:** Das gesamte Anlagenprogramm läuft im Weckalarm-OB30 mit 100 ms (`CYCLE_TIME`). Pro Durchlauf wandert ein Paket um 0,5 % weiter. Damit ist die Bewegung unabhängig von der schwankenden OB1-Zykluszeit, OB1 bleibt leer.
 
 ## 2. Stationen und Positionen
 

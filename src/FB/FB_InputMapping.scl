@@ -1,0 +1,45 @@
+FUNCTION_BLOCK "FB_InputMapping"
+TITLE = Eingänge aus Hardware oder Simulation
+{ S7_Optimized_Access := 'TRUE' }
+// Füllt das Eingangsabbild der Steuerung (DB_IO.Inputs).
+// SimMode = TRUE:  Werte aus der Simulation (DB_IO.SimInputs, geschrieben von FB_Simulation)
+// SimMode = FALSE: Werte von den Hardware-Eingängen (PLC-Variablentabelle IO, siehe src/Tags/IoTags.csv)
+// Die Steuerlogik liest danach nur noch DB_IO.Inputs.
+VERSION : 0.1
+   VAR_INPUT
+      SimMode : Bool;   // TRUE = Simulation, FALSE = Hardware
+   END_VAR
+
+   VAR_IN_OUT
+      SimInputs : "UDT_IoInputs";   // Von der Simulation erzeugte Eingänge
+      Inputs : "UDT_IoInputs";   // Ergebnis: Eingangsabbild für die Steuerlogik
+   END_VAR
+
+
+BEGIN
+	IF #SimMode THEN
+	    #Inputs := #SimInputs;
+	ELSE
+	    #Inputs.EmergencyStopOk := "iEmergencyStopOk";
+	    #Inputs.MotorProtectOk := "iMotorProtectOk";
+	    #Inputs.Infeed := "iInfeed";
+	    #Inputs.SizeLarge := "iSizeLarge";
+	    #Inputs.Metal := "iMetal";
+	    #Inputs.QualityOk := "iQualityOk";
+	    #Inputs.SortEntry := "iSortEntry";
+
+	    #Inputs.Exit[1] := "iExit1";
+	    #Inputs.Exit[2] := "iExit2";
+	    #Inputs.Exit[3] := "iExit3";
+	    #Inputs.Exit[4] := "iExitReject";
+
+	    #Inputs.SorterRetracted[1] := "iSorter1Retracted";
+	    #Inputs.SorterExtended[1] := "iSorter1Extended";
+	    #Inputs.SorterRetracted[2] := "iSorter2Retracted";
+	    #Inputs.SorterExtended[2] := "iSorter2Extended";
+	    #Inputs.SorterRetracted[3] := "iSorter3Retracted";
+	    #Inputs.SorterExtended[3] := "iSorter3Extended";
+
+	    #Inputs.WeightRaw := "iWeightRaw";
+	END_IF;
+END_FUNCTION_BLOCK

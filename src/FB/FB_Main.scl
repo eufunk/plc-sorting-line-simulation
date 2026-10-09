@@ -1,0 +1,43 @@
+FUNCTION_BLOCK "FB_Main"
+TITLE = Hauptbaustein der Sortieranlage
+{ S7_Optimized_Access := 'TRUE' }
+// Wird alle 100 ms aus OB30 aufgerufen (Instanz: IDB_Main).
+// Feste Reihenfolge pro Durchlauf:
+//   1. Simulation     – bewegt Pakete und Sortierer, erzeugt DB_IO.SimInputs
+//                       aus den Ausgängen des vorherigen Durchlaufs
+//   2. Eingänge       – DB_IO.Inputs aus Simulation oder Hardware
+//   3. Steuerlogik    – Anlagenzustand, Band, Paketverfolgung, Sortierung, Alarme, Statistik
+//   4. Ausgänge       – DB_IO.Outputs auf die Hardware
+// Die Bausteine für Schritt 3 folgen in Phase 3.
+VERSION : 0.1
+   VAR
+      Simulation : "FB_Simulation";
+      InputMapping : "FB_InputMapping";
+      OutputMapping : "FB_OutputMapping";
+   END_VAR
+
+
+BEGIN
+	// 1. Simulation (nur im Simulationsbetrieb)
+	IF "DB_IO".SimMode THEN
+	    #Simulation(Outputs := "DB_IO".Outputs,
+	                SimInputs := "DB_IO".SimInputs);
+	END_IF;
+
+	// 2. Eingänge
+	#InputMapping(SimMode := "DB_IO".SimMode,
+	              SimInputs := "DB_IO".SimInputs,
+	              Inputs := "DB_IO".Inputs);
+
+	// 3. Steuerlogik
+	//    folgt: FB_Plant (Anlagenzustand, Betriebsarten)
+	//           FB_Conveyor
+	//           FB_Detection (Paketverfolgung, Stationen ST1–ST5)
+	//           FB_Sorting
+	//           FB_Alarms
+	//           FB_Counters
+
+	// 4. Ausgänge
+	#OutputMapping(SimMode := "DB_IO".SimMode,
+	               Outputs := "DB_IO".Outputs);
+END_FUNCTION_BLOCK

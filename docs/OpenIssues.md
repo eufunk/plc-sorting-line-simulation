@@ -18,6 +18,7 @@
 - **Laptop:** Repository, Quellen schreiben, in TIA importieren und übersetzen, Projekt archivieren (*Projekt → Archivieren*)
 - **Intel-Rechner (Core i3):** TIA Portal V21 + S7-PLCSIM V21, archiviertes Projekt dearchivieren und testen
 - Systemvoraussetzungen des Intel-Rechners noch zu prüfen (RAM, SSD, Windows-Edition)
+- S7-PLCSIM V21 auf dem Laptop deinstalliert (2026-10-09). TIA Portal, Automation License Manager und Npcap bleiben installiert.
 
 ### Ausweichoption: TIA Portal Cloud (Siemens)
 

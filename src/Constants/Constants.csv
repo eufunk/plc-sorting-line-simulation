@@ -77,3 +77,5 @@ SIM_INTERVAL_MIN;Time;T#3S;Kleinste einstellbare Erzeugungsrate
 SIM_INTERVAL_MAX;Time;T#10S;Größte einstellbare Erzeugungsrate
 SIM_WEIGHT_MIN;Real;0.2;Kleinstes simuliertes Gewicht in kg
 SIM_WEIGHT_MAX;Real;8.0;Größtes simuliertes Gewicht in kg
+CYCLE_TIME;Time;T#100MS;Taktzeit OB30, ein Programmdurchlauf
+CYCLE_SEC;Real;0.1;Taktzeit OB30 in Sekunden (für Positionsrechnung)
