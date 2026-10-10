@@ -1,0 +1,107 @@
+FUNCTION_BLOCK "FB_Counters"
+TITLE = Produktionsstatistik
+{ S7_Optimized_Access := 'TRUE' }
+// Zählt jedes Paket genau einmal, wenn es seinen Endzustand erreicht
+// (DB_Packages: SORTED, REJECTED oder ERROR), und schreibt die Kennzahlen nach DB_Statistics.
+// SORTED/REJECTED stehen nur einen Durchlauf an (FB_Detection gibt den Platz danach frei),
+// deshalb muss dieser Baustein nach FB_Detection laufen.
+// Zurücksetzen über die HMI-Taste DB_Hmi.Statistics.Reset.
+VERSION : 0.1
+   VAR
+      lastStatus : Array[1.."MAX_PACKAGES"] of Int;   // Paketstatus im vorherigen Durchlauf
+      autoTicks : DInt;   // Durchläufe im Automatikbetrieb seit dem letzten Zurücksetzen (für den Durchsatz)
+   END_VAR
+
+   VAR_TEMP
+      i : Int;
+      k : Int;
+      status : Int;
+      exitNo : Int;
+      reason : Int;
+      lastMs : DInt;
+      avgMs : DInt;
+      autoMinutes : Real;
+   END_VAR
+
+
+BEGIN
+	REGION Zurücksetzen
+	    IF "DB_Hmi".Statistics.Reset THEN
+	        "DB_Statistics".Statistics.Total := 0;
+	        "DB_Statistics".Statistics.Good := 0;
+	        "DB_Statistics".Statistics.Rejected := 0;
+	        "DB_Statistics".Statistics.Errors := 0;
+	        FOR #k := 1 TO 4 DO
+	            "DB_Statistics".Statistics.ExitCount[#k] := 0;
+	        END_FOR;
+	        FOR #k := 1 TO 6 DO
+	            "DB_Statistics".Statistics.RejectReasonCount[#k] := 0;
+	        END_FOR;
+	        "DB_Statistics".Statistics.RejectRate := 0.0;
+	        "DB_Statistics".Statistics.LastTransitTime := T#0S;
+	        "DB_Statistics".Statistics.AvgTransitTime := T#0S;
+	        "DB_Statistics".Statistics.PackagesPerMinute := 0.0;
+	        #autoTicks := 0;
+	        "DB_Hmi".Statistics.Reset := FALSE;
+	    END_IF;
+	END_REGION
+
+	REGION Pakete im Endzustand zählen
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        #status := "DB_Packages".Packages[#i].Status;
+
+	        IF #status <> #lastStatus[#i] THEN
+	            IF #status = "PKG_SORTED" OR #status = "PKG_REJECTED" THEN
+	                "DB_Statistics".Statistics.Total := "DB_Statistics".Statistics.Total + 1;
+
+	                #exitNo := "DB_Packages".Packages[#i].ExitNo;
+	                IF #exitNo >= 1 AND #exitNo <= 4 THEN
+	                    "DB_Statistics".Statistics.ExitCount[#exitNo] := "DB_Statistics".Statistics.ExitCount[#exitNo] + 1;
+	                END_IF;
+
+	                IF #status = "PKG_SORTED" THEN
+	                    "DB_Statistics".Statistics.Good := "DB_Statistics".Statistics.Good + 1;
+	                ELSE
+	                    "DB_Statistics".Statistics.Rejected := "DB_Statistics".Statistics.Rejected + 1;
+	                    #reason := "DB_Packages".Packages[#i].RejectReason;
+	                    IF #reason >= 1 AND #reason <= 6 THEN
+	                        "DB_Statistics".Statistics.RejectReasonCount[#reason] := "DB_Statistics".Statistics.RejectReasonCount[#reason] + 1;
+	                    END_IF;
+	                END_IF;
+
+	                // Durchlaufzeit: letzter Wert und gleitender Mittelwert über alle Pakete
+	                "DB_Statistics".Statistics.LastTransitTime := "DB_Packages".Packages[#i].TransitTime;
+	                #lastMs := TIME_TO_DINT("DB_Packages".Packages[#i].TransitTime);
+	                #avgMs := TIME_TO_DINT("DB_Statistics".Statistics.AvgTransitTime);
+	                #avgMs := #avgMs + (#lastMs - #avgMs) / "DB_Statistics".Statistics.Total;
+	                "DB_Statistics".Statistics.AvgTransitTime := DINT_TO_TIME(#avgMs);
+
+	            ELSIF #status = "PKG_ERROR" THEN
+	                "DB_Statistics".Statistics.Errors := "DB_Statistics".Statistics.Errors + 1;
+	            END_IF;
+	        END_IF;
+
+	        #lastStatus[#i] := #status;
+	    END_FOR;
+	END_REGION
+
+	REGION Kennzahlen
+	    IF "DB_Statistics".Statistics.Total > 0 THEN
+	        "DB_Statistics".Statistics.RejectRate := DINT_TO_REAL("DB_Statistics".Statistics.Rejected) * 100.0
+	                                                  / DINT_TO_REAL("DB_Statistics".Statistics.Total);
+	    ELSE
+	        "DB_Statistics".Statistics.RejectRate := 0.0;
+	    END_IF;
+
+	    // Durchsatz: fertige Pakete pro Minute Automatikbetrieb
+	    IF "DB_Plant".State = "PLANT_AUTO" THEN
+	        #autoTicks := #autoTicks + 1;
+	    END_IF;
+	    #autoMinutes := DINT_TO_REAL(#autoTicks) * "CYCLE_SEC" / 60.0;
+	    IF #autoMinutes > 0.0 THEN
+	        "DB_Statistics".Statistics.PackagesPerMinute := DINT_TO_REAL("DB_Statistics".Statistics.Total) / #autoMinutes;
+	    ELSE
+	        "DB_Statistics".Statistics.PackagesPerMinute := 0.0;
+	    END_IF;
+	END_REGION
+END_FUNCTION_BLOCK

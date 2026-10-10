@@ -8,13 +8,18 @@ TITLE = Hauptbaustein der Sortieranlage
 //   2. Eingänge       – DB_IO.Inputs aus Simulation oder Hardware
 //   3. Steuerlogik    – Anlagenzustand, Band, Paketverfolgung, Sortierung, Alarme, Statistik
 //   4. Ausgänge       – DB_IO.Outputs auf die Hardware
-// Die Bausteine für Schritt 3 folgen in Phase 3.
+// Reihenfolge in Schritt 3: Detection, Sorting und Alarms werten RESET aus,
+// danach setzt FB_Plant die HMI-Tasten zurück. FB_Counters zählt zuletzt.
 VERSION : 0.1
    VAR
       Simulation : "FB_Simulation";
       InputMapping : "FB_InputMapping";
+      Detection : "FB_Detection";
+      Sorting : "FB_Sorting";
+      Alarms : "FB_Alarms";
       Plant : "FB_Plant";
       Conveyor : "FB_Conveyor";
+      Counters : "FB_Counters";
       OutputMapping : "FB_OutputMapping";
    END_VAR
 
@@ -32,7 +37,24 @@ BEGIN
 	              Inputs := "DB_IO".Inputs);
 
 	// 3. Steuerlogik
-	//    folgt: FB_Alarms (vor FB_Plant: wertet RESET aus, bevor FB_Plant die Tasten zurücksetzt)
+	//    Paketverfolgung zuerst: rechnet mit dem Bandzustand des vorherigen Durchlaufs,
+	//    genau wie die Simulation, und sieht RESET, bevor FB_Plant die Tasten zurücksetzt
+	#Detection(BeltRunning := "DB_Plant".Conveyor.Running,
+	           ResetErrors := "DB_Hmi".Plant.Reset,
+	           Inputs := "DB_IO".Inputs);
+	
+	#Sorting(PlantState := "DB_Plant".State,
+	         ResetFaults := "DB_Hmi".Plant.Reset,
+	         Inputs := "DB_IO".Inputs,
+	         Outputs := "DB_IO".Outputs);
+	
+	#Alarms(Reset := "DB_Hmi".Plant.Reset,
+	        PackageLost := #Detection.PackageLost,
+	        ExitTimeout := #Detection.ExitTimeout,
+	        Missort := #Detection.Missort,
+	        ScaleFault := #Detection.ScaleFault,
+	        Inputs := "DB_IO".Inputs);
+	
 	#Plant(Inputs := "DB_IO".Inputs,
 	       Outputs := "DB_IO".Outputs);
 	
@@ -40,9 +62,7 @@ BEGIN
 	          Conveyor := "DB_Plant".Conveyor,
 	          Outputs := "DB_IO".Outputs);
 	
-	//    folgt: FB_Detection (Paketverfolgung, Stationen ST1–ST5)
-	//           FB_Sorting
-	//           FB_Counters
+	#Counters();
 
 	// 4. Ausgänge
 	#OutputMapping(SimMode := "DB_IO".SimMode,

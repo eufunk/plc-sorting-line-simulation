@@ -1,0 +1,104 @@
+FUNCTION_BLOCK "FB_Alarms"
+TITLE = Alarme bilden, speichern, quittieren
+{ S7_Optimized_Access := 'TRUE' }
+// Bildet aus Eingängen, Sortiererfehlern und Ereignissen der Paketverfolgung die Alarmbits
+// (Bitbelegung: Konstanten ALM_*, docs/Anlagenkonfiguration.md, Abschnitt 8) und führt sie in DB_Plant.Alarm:
+//   Active          Ursache steht gerade an
+//   Latched         aufgetreten, gespeichert bis RESET (und Ursache beseitigt)
+//   Unacknowledged  neu aufgetreten, noch nicht quittiert -> H2 blinkt
+//   AnyFault        Störung gespeichert -> FB_Plant geht in FAULT, Band steht
+//   AnyWarning      Warnung gespeichert (ALM_WARNING_MASK), Band läuft weiter
+// Quittieren: Bits in AckHmi (vom HMI) oder RESET quittiert alles.
+// Muss VOR FB_Plant laufen (FB_Plant setzt die RESET-Taste zurück).
+VERSION : 0.1
+   VAR_INPUT
+      Reset : Bool;   // RESET vom HMI
+      PackageLost : Bool;   // Ereignis aus FB_Detection
+      ExitTimeout : Bool;   // Ereignis aus FB_Detection
+      Missort : Bool;   // Ereignis aus FB_Detection
+      ScaleFault : Bool;   // Ereignis aus FB_Detection
+   END_VAR
+
+   VAR_IN_OUT
+      Inputs : "UDT_IoInputs";   // Eingangsabbild (Not-Halt, Motorschutz)
+   END_VAR
+
+   VAR_TEMP
+      cause : Array[0..15] of Bool;   // Alarmursachen, Index = Bitnummer
+      active : Word;
+      newBits : Word;
+      b : Int;
+      s : Int;
+      plausibility : Bool;
+   END_VAR
+
+
+BEGIN
+	REGION Ursachen
+	    FOR #b := 0 TO 15 DO
+	        #cause[#b] := FALSE;
+	    END_FOR;
+
+	    #cause["ALM_EMERGENCY_STOP"] := NOT #Inputs.EmergencyStopOk;
+	    #cause["ALM_MOTOR_PROTECT"] := NOT #Inputs.MotorProtectOk;
+
+	    #cause["ALM_SORTER1_EXTEND"] := "DB_Plant".Sorters[1].FaultExtend;
+	    #cause["ALM_SORTER2_EXTEND"] := "DB_Plant".Sorters[2].FaultExtend;
+	    #cause["ALM_SORTER3_EXTEND"] := "DB_Plant".Sorters[3].FaultExtend;
+	    #cause["ALM_SORTER1_RETRACT"] := "DB_Plant".Sorters[1].FaultRetract;
+	    #cause["ALM_SORTER2_RETRACT"] := "DB_Plant".Sorters[2].FaultRetract;
+	    #cause["ALM_SORTER3_RETRACT"] := "DB_Plant".Sorters[3].FaultRetract;
+
+	    #plausibility := FALSE;
+	    FOR #s := 1 TO "SORTER_COUNT" DO
+	        #plausibility := #plausibility OR "DB_Plant".Sorters[#s].FaultPlausibility;
+	    END_FOR;
+	    #cause["ALM_SORTER_PLAUSIBILITY"] := #plausibility;
+
+	    #cause["ALM_PACKAGE_LOST"] := #PackageLost;
+	    #cause["ALM_EXIT_TIMEOUT"] := #ExitTimeout;
+	    #cause["ALM_MISSORT"] := #Missort;
+	    #cause["ALM_SCALE_FAULT"] := #ScaleFault;
+
+	    // Bits zu einem Word zusammensetzen
+	    #active := 16#0000;
+	    FOR #b := 0 TO 15 DO
+	        IF #cause[#b] THEN
+	            #active := #active OR SHL(IN := WORD#16#0001, N := #b);
+	        END_IF;
+	    END_FOR;
+	END_REGION
+
+	REGION Speichern, quittieren, zurücksetzen
+	    #newBits := #active AND NOT "DB_Plant".Alarm.Latched;
+
+	    IF #Reset THEN
+	        // Nur Alarme, deren Ursache noch ansteht, bleiben gespeichert
+	        "DB_Plant".Alarm.Latched := #active;
+	        "DB_Plant".Alarm.Unacknowledged := 16#0000;
+	    ELSE
+	        "DB_Plant".Alarm.Latched := "DB_Plant".Alarm.Latched OR #active;
+	        "DB_Plant".Alarm.Unacknowledged := ("DB_Plant".Alarm.Unacknowledged OR #newBits)
+	                                            AND NOT "DB_Plant".Alarm.AckHmi;
+	    END_IF;
+	    "DB_Plant".Alarm.AckHmi := 16#0000;
+	    "DB_Plant".Alarm.Active := #active;
+
+	    // Erstwert: erster Alarm seit dem letzten Zurücksetzen
+	    IF "DB_Plant".Alarm.Latched = 16#0000 THEN
+	        "DB_Plant".Alarm.FirstAlarm := -1;
+	    ELSIF "DB_Plant".Alarm.FirstAlarm < 0 AND #newBits <> 16#0000 THEN
+	        FOR #b := 15 TO 0 BY -1 DO
+	            IF #cause[#b] AND (#newBits AND SHL(IN := WORD#16#0001, N := #b)) <> 16#0000 THEN
+	                "DB_Plant".Alarm.FirstAlarm := #b;
+	            END_IF;
+	        END_FOR;
+	    END_IF;
+	END_REGION
+
+	REGION Sammelmeldungen
+	    "DB_Plant".Alarm.AnyFault := ("DB_Plant".Alarm.Latched AND NOT "ALM_WARNING_MASK") <> 16#0000;
+	    "DB_Plant".Alarm.AnyWarning := ("DB_Plant".Alarm.Latched AND "ALM_WARNING_MASK") <> 16#0000;
+	    "DB_Plant".Alarm.Flash := "DB_Plant".Alarm.Unacknowledged <> 16#0000;
+	END_REGION
+END_FUNCTION_BLOCK

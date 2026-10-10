@@ -1,0 +1,162 @@
+FUNCTION_BLOCK "FB_Sorting"
+TITLE = Sortierer Q1..Q3
+{ S7_Optimized_Access := 'TRUE' }
+// Ein Zustandsautomat je Sortierer (DB_Plant.Sorters[1..SORTER_COUNT]):
+//   RETRACTED  -> EXTENDING   Automatik: Paket mit passendem Ziel erreicht den Sortierer
+//                             Handbetrieb: HMI-Taste
+//   EXTENDING  -> EXTENDED    Endlage ausgefahren erreicht (Automatik: Paket gilt als ausgeschleust)
+//   EXTENDED   -> RETRACTING  Automatik sofort, Handbetrieb beim Loslassen der Taste
+//   RETRACTING -> RETRACTED   Endlage eingefahren erreicht
+//   jede Bewegung -> FAULT    Endlage nicht innerhalb SORTER_TIMEOUT oder beide Endlagen belegt
+//   FAULT -> RETRACTING       RESET (Kolben fährt zurück, Überwachung läuft erneut)
+// Außerhalb von Automatik und Handbetrieb fahren alle Sortierer zurück.
+// Die Fehlerbits werden in FB_Alarms zu Alarmen.
+VERSION : 0.1
+   VAR_INPUT
+      PlantState : Int;   // Anlagenzustand PLANT_* (aus dem vorherigen Durchlauf)
+      ResetFaults : Bool;   // RESET vom HMI
+   END_VAR
+
+   VAR_IN_OUT
+      Inputs : "UDT_IoInputs";   // Eingangsabbild (Endlagen)
+      Outputs : "UDT_IoOutputs";   // Ausgangsabbild (Ventile)
+   END_VAR
+
+   VAR
+      packageSlot : Array[1.."SORTER_COUNT"] of Int;   // Platz im Paket-Array, das gerade ausgeschleust wird
+   END_VAR
+
+   VAR_TEMP
+      s : Int;
+      i : Int;
+      sorterPos : Array[1.."SORTER_COUNT"] of Real;
+      autoMode : Bool;
+      manualMode : Bool;
+      candidate : Int;
+      pos : Real;
+   END_VAR
+
+
+BEGIN
+	#sorterPos[1] := "POS_SORTER1";
+	#sorterPos[2] := "POS_SORTER2";
+	#sorterPos[3] := "POS_SORTER3";
+
+	#autoMode := #PlantState = "PLANT_AUTO";
+	#manualMode := #PlantState = "PLANT_MANUAL";
+
+	FOR #s := 1 TO "SORTER_COUNT" DO
+	    REGION Endlagen
+	        "DB_Plant".Sorters[#s].IsRetracted := #Inputs.SorterRetracted[#s];
+	        "DB_Plant".Sorters[#s].IsExtended := #Inputs.SorterExtended[#s];
+
+	        IF #Inputs.SorterRetracted[#s] AND #Inputs.SorterExtended[#s] THEN
+	            "DB_Plant".Sorters[#s].FaultPlausibility := TRUE;
+	            "DB_Plant".Sorters[#s].State := "SORTER_FAULT";
+	        END_IF;
+	    END_REGION
+
+	    REGION Automatik: Paket vor dem Sortierer?
+	        // Auslösen, sobald die Paketmitte den Sortierer bis auf SENSOR_WINDOW erreicht.
+	        // Der Kolben braucht ca. 0,25 s bis zum Paket, dann steht es mittig davor.
+	        "DB_Plant".Sorters[#s].AutoRequest := FALSE;
+	        #candidate := 0;
+	        IF #autoMode THEN
+	            FOR #i := 1 TO "MAX_PACKAGES" DO
+	                #pos := "DB_Packages".Packages[#i].Position;
+	                IF "DB_Packages".Packages[#i].Status = "PKG_SORTING"
+	                    AND "DB_Packages".Packages[#i].ExitNo = 0
+	                    AND "DB_Packages".Packages[#i].Target = #s
+	                    AND #pos >= #sorterPos[#s] - "SENSOR_WINDOW"
+	                    AND #pos <= #sorterPos[#s] + "SENSOR_WINDOW"
+	                THEN
+	                    #candidate := #i;
+	                END_IF;
+	            END_FOR;
+	            "DB_Plant".Sorters[#s].AutoRequest := #candidate > 0;
+	        END_IF;
+	    END_REGION
+
+	    REGION Zustandsautomat
+	        IF "DB_Plant".Sorters[#s].State = "SORTER_RETRACTED" THEN
+	            "DB_Plant".Sorters[#s].Extend := FALSE;
+	            IF "DB_Plant".Sorters[#s].AutoRequest
+	                OR (#manualMode AND "DB_Plant".Sorters[#s].ManualRequest)
+	            THEN
+	                #packageSlot[#s] := #candidate;
+	                IF #candidate > 0 THEN
+	                    "DB_Plant".Sorters[#s].PackageId := "DB_Packages".Packages[#candidate].ID;
+	                ELSE
+	                    "DB_Plant".Sorters[#s].PackageId := 0;
+	                END_IF;
+	                "DB_Plant".Sorters[#s].MoveTime := T#0S;
+	                "DB_Plant".Sorters[#s].State := "SORTER_EXTENDING";
+	            END_IF;
+
+	        ELSIF "DB_Plant".Sorters[#s].State = "SORTER_EXTENDING" THEN
+	            "DB_Plant".Sorters[#s].Extend := TRUE;
+	            "DB_Plant".Sorters[#s].MoveTime := "DB_Plant".Sorters[#s].MoveTime + "CYCLE_TIME";
+	            IF #Inputs.SorterExtended[#s] THEN
+	                "DB_Plant".Sorters[#s].StrokeCount := "DB_Plant".Sorters[#s].StrokeCount + 1;
+	                // Paket ist vom Band geschoben: FB_Detection überwacht jetzt die Ankunft im Ausgang
+	                IF #packageSlot[#s] > 0 THEN
+	                    IF "DB_Packages".Packages[#packageSlot[#s]].ID = "DB_Plant".Sorters[#s].PackageId THEN
+	                        "DB_Packages".Packages[#packageSlot[#s]].ExitNo := #s;
+	                        "DB_Packages".Packages[#packageSlot[#s]].ExitTimer := T#0S;
+	                    END_IF;
+	                END_IF;
+	                "DB_Plant".Sorters[#s].State := "SORTER_EXTENDED";
+	            ELSIF "DB_Plant".Sorters[#s].MoveTime > "SORTER_TIMEOUT" THEN
+	                "DB_Plant".Sorters[#s].FaultExtend := TRUE;
+	                "DB_Plant".Sorters[#s].State := "SORTER_FAULT";
+	            END_IF;
+
+	        ELSIF "DB_Plant".Sorters[#s].State = "SORTER_EXTENDED" THEN
+	            "DB_Plant".Sorters[#s].Extend := TRUE;
+	            IF NOT (#manualMode AND "DB_Plant".Sorters[#s].ManualRequest) THEN
+	                "DB_Plant".Sorters[#s].MoveTime := T#0S;
+	                "DB_Plant".Sorters[#s].State := "SORTER_RETRACTING";
+	            END_IF;
+
+	        ELSIF "DB_Plant".Sorters[#s].State = "SORTER_RETRACTING" THEN
+	            "DB_Plant".Sorters[#s].Extend := FALSE;
+	            "DB_Plant".Sorters[#s].MoveTime := "DB_Plant".Sorters[#s].MoveTime + "CYCLE_TIME";
+	            IF #Inputs.SorterRetracted[#s] THEN
+	                #packageSlot[#s] := 0;
+	                "DB_Plant".Sorters[#s].PackageId := 0;
+	                "DB_Plant".Sorters[#s].State := "SORTER_RETRACTED";
+	            ELSIF "DB_Plant".Sorters[#s].MoveTime > "SORTER_TIMEOUT" THEN
+	                "DB_Plant".Sorters[#s].FaultRetract := TRUE;
+	                "DB_Plant".Sorters[#s].State := "SORTER_FAULT";
+	            END_IF;
+
+	        ELSE
+	            // SORTER_FAULT oder ungültiger Zustand: Ventil aus, warten auf RESET
+	            "DB_Plant".Sorters[#s].Extend := FALSE;
+	            IF #ResetFaults THEN
+	                "DB_Plant".Sorters[#s].FaultExtend := FALSE;
+	                "DB_Plant".Sorters[#s].FaultRetract := FALSE;
+	                "DB_Plant".Sorters[#s].FaultPlausibility := FALSE;
+	                #packageSlot[#s] := 0;
+	                "DB_Plant".Sorters[#s].PackageId := 0;
+	                "DB_Plant".Sorters[#s].MoveTime := T#0S;
+	                "DB_Plant".Sorters[#s].State := "SORTER_RETRACTING";
+	            END_IF;
+	        END_IF;
+	    END_REGION
+
+	    REGION Nur in Automatik und Hand bewegen
+	        IF NOT (#autoMode OR #manualMode) THEN
+	            "DB_Plant".Sorters[#s].Extend := FALSE;
+	            IF "DB_Plant".Sorters[#s].State = "SORTER_EXTENDING"
+	                OR "DB_Plant".Sorters[#s].State = "SORTER_EXTENDED"
+	            THEN
+	                "DB_Plant".Sorters[#s].MoveTime := T#0S;
+	                "DB_Plant".Sorters[#s].State := "SORTER_RETRACTING";
+	            END_IF;
+	        END_IF;
+	    END_REGION
+
+	    #Outputs.SorterExtend[#s] := "DB_Plant".Sorters[#s].Extend;
+	END_FOR;
+END_FUNCTION_BLOCK

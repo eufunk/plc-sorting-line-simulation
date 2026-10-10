@@ -1,0 +1,270 @@
+FUNCTION_BLOCK "FB_Detection"
+TITLE = Paketverfolgung und Werkstückerkennung
+{ S7_Optimized_Access := 'TRUE' }
+// Verfolgt jedes Paket vom Einlauf bis zum Ausgang (DB_Packages.Packages[1..MAX_PACKAGES]):
+//   S1 Einlauf     neues Paket anlegen (steigende Flanke)
+//   ST2..ST5       beim Überfahren der Stationsposition Sensor auswerten
+//   ST5            Ziel nach den Sortierregeln bestimmen -> Status SORTING
+//   S6             Kontrolle: Paket muss dort sein, sonst ERROR + Alarm "Paket nicht erkannt"
+//   Bandende       Paket fällt in den Ausschuss (Ausgang 4); mit Ziel 1..3 = Fehlsortierung
+//   S7..S10        Ankunft im Ausgang bestätigen -> SORTED / REJECTED, sonst Timeout -> ERROR
+// Das Ausschleusen an Q1..Q3 übernimmt FB_Sorting (setzt ExitNo).
+// Die Position wird aus der Bandbewegung mitgerechnet, nicht gemessen.
+// Ereignis-Ausgänge sind für einen Durchlauf TRUE, FB_Alarms speichert sie.
+VERSION : 0.1
+   VAR_INPUT
+      BeltRunning : Bool;   // Band lief im vorherigen Durchlauf (gleicher Stand wie die Simulation)
+      ResetErrors : Bool;   // RESET: Pakete im Status ERROR entfernen
+   END_VAR
+
+   VAR_OUTPUT
+      PackageLost : Bool;   // Paket nicht an S6 oder kein freier Platz bei S1
+      ExitTimeout : Bool;   // Paket kam nicht innerhalb EXIT_TIMEOUT am Ausgang an
+      Missort : Bool;   // Paket mit Ziel 1..3 hat das Bandende erreicht
+      ScaleFault : Bool;   // Waage lieferte einen ungültigen Rohwert
+   END_VAR
+
+   VAR_IN_OUT
+      Inputs : "UDT_IoInputs";   // Eingangsabbild
+   END_VAR
+
+   VAR
+      infeedOld : Bool;   // S1 im vorherigen Durchlauf
+      exitOld : Array[1..4] of Bool;   // S7..S10 im vorherigen Durchlauf
+   END_VAR
+
+   VAR_TEMP
+      i : Int;
+      k : Int;
+      slot : Int;
+      status : Int;
+      step : Real;
+      oldPos : Real;
+      newPos : Real;
+      infeedEdge : Bool;
+      exitEdge : Array[1..4] of Bool;
+      oldest : Int;
+      oldestTime : Time;
+      activeCount : Int;
+   END_VAR
+
+
+BEGIN
+	REGION Ereignisse und Flanken
+	    #PackageLost := FALSE;
+	    #ExitTimeout := FALSE;
+	    #Missort := FALSE;
+	    #ScaleFault := FALSE;
+
+	    #infeedEdge := #Inputs.Infeed AND NOT #infeedOld;
+	    #infeedOld := #Inputs.Infeed;
+	    FOR #k := 1 TO 4 DO
+	        #exitEdge[#k] := #Inputs.ExitSensor[#k] AND NOT #exitOld[#k];
+	        #exitOld[#k] := #Inputs.ExitSensor[#k];
+	    END_FOR;
+	END_REGION
+
+	REGION Abgeschlossene Pakete freigeben
+	    // SORTED/REJECTED stehen genau einen Durchlauf, damit FB_Counters sie zählen kann
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        #status := "DB_Packages".Packages[#i].Status;
+	        IF #status = "PKG_SORTED" OR #status = "PKG_REJECTED"
+	            OR (#status = "PKG_ERROR" AND #ResetErrors)
+	        THEN
+	            "DB_Packages".Packages[#i].Status := "PKG_EMPTY";
+	            "DB_Packages".Packages[#i].ID := 0;
+	        END_IF;
+	    END_FOR;
+	END_REGION
+
+	REGION Pakete auf dem Band verfolgen
+	    IF #BeltRunning THEN
+	        #step := "BELT_SPEED" * "CYCLE_SEC";
+	    ELSE
+	        #step := 0.0;
+	    END_IF;
+
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        #status := "DB_Packages".Packages[#i].Status;
+	        IF (#status = "PKG_DETECTED" OR #status = "PKG_INSPECTION" OR #status = "PKG_SORTING")
+	            AND "DB_Packages".Packages[#i].ExitNo = 0
+	        THEN
+	            #oldPos := "DB_Packages".Packages[#i].Position;
+	            #newPos := #oldPos + #step;
+	            "DB_Packages".Packages[#i].Position := #newPos;
+
+	            // ST2 Größe
+	            IF #oldPos < "POS_ST2" AND #newPos >= "POS_ST2" THEN
+	                IF #Inputs.SizeLarge THEN
+	                    "DB_Packages".Packages[#i].Size := "SIZE_LARGE";
+	                ELSE
+	                    "DB_Packages".Packages[#i].Size := "SIZE_SMALL";
+	                END_IF;
+	                "DB_Packages".Packages[#i].SizeMeasured := TRUE;
+	                "DB_Packages".Packages[#i].Status := "PKG_INSPECTION";
+	            END_IF;
+
+	            // ST3 Material
+	            IF #oldPos < "POS_ST3" AND #newPos >= "POS_ST3" THEN
+	                IF #Inputs.Metal THEN
+	                    "DB_Packages".Packages[#i].Material := "MAT_METAL";
+	                ELSE
+	                    "DB_Packages".Packages[#i].Material := "MAT_PLASTIC";
+	                END_IF;
+	                "DB_Packages".Packages[#i].MaterialMeasured := TRUE;
+	            END_IF;
+
+	            // ST4 Gewicht: Rohwert 0..SCALE_RAW_MAX entspricht 0..SCALE_KG_MAX
+	            IF #oldPos < "POS_ST4" AND #newPos >= "POS_ST4" THEN
+	                IF #Inputs.WeightRaw < 0 OR #Inputs.WeightRaw > "SCALE_RAW_MAX" THEN
+	                    "DB_Packages".Packages[#i].Weight := 0.0;
+	                    "DB_Packages".Packages[#i].RejectReason := "REJ_SCALE_FAULT";
+	                    #ScaleFault := TRUE;
+	                ELSE
+	                    "DB_Packages".Packages[#i].Weight := INT_TO_REAL(#Inputs.WeightRaw) * "SCALE_KG_MAX" / INT_TO_REAL("SCALE_RAW_MAX");
+	                    "DB_Packages".Packages[#i].WeightMeasured := TRUE;
+	                END_IF;
+	            END_IF;
+
+	            // ST5 Qualität und Zielbestimmung (Sortierregeln: docs/FeatureSpec.md, Abschnitt 5)
+	            IF #oldPos < "POS_ST5" AND #newPos >= "POS_ST5" THEN
+	                "DB_Packages".Packages[#i].QualityOk := #Inputs.QualityOk;
+	                "DB_Packages".Packages[#i].QualityMeasured := TRUE;
+
+	                IF "DB_Packages".Packages[#i].RejectReason = "REJ_SCALE_FAULT" THEN
+	                    "DB_Packages".Packages[#i].Target := "TARGET_REJECT";
+	                ELSIF NOT "DB_Packages".Packages[#i].QualityOk THEN
+	                    "DB_Packages".Packages[#i].Target := "TARGET_REJECT";
+	                    "DB_Packages".Packages[#i].RejectReason := "REJ_QUALITY";
+	                ELSIF NOT ("DB_Packages".Packages[#i].SizeMeasured
+	                           AND "DB_Packages".Packages[#i].MaterialMeasured
+	                           AND "DB_Packages".Packages[#i].WeightMeasured)
+	                THEN
+	                    "DB_Packages".Packages[#i].Target := "TARGET_REJECT";
+	                    "DB_Packages".Packages[#i].RejectReason := "REJ_INVALID";
+	                ELSIF "DB_Packages".Packages[#i].Weight < "WEIGHT_MIN" THEN
+	                    "DB_Packages".Packages[#i].Target := "TARGET_REJECT";
+	                    "DB_Packages".Packages[#i].RejectReason := "REJ_UNDERWEIGHT";
+	                ELSIF "DB_Packages".Packages[#i].Weight > "WEIGHT_MAX" THEN
+	                    "DB_Packages".Packages[#i].Target := "TARGET_REJECT";
+	                    "DB_Packages".Packages[#i].RejectReason := "REJ_OVERWEIGHT";
+	                ELSIF "DB_Packages".Packages[#i].Material = "MAT_METAL" THEN
+	                    "DB_Packages".Packages[#i].Target := "TARGET_METAL";
+	                ELSIF "DB_Packages".Packages[#i].Size = "SIZE_SMALL" THEN
+	                    "DB_Packages".Packages[#i].Target := "TARGET_PLASTIC_SMALL";
+	                ELSIF "DB_Packages".Packages[#i].Size = "SIZE_LARGE" THEN
+	                    "DB_Packages".Packages[#i].Target := "TARGET_PLASTIC_LARGE";
+	                ELSE
+	                    "DB_Packages".Packages[#i].Target := "TARGET_REJECT";
+	                    "DB_Packages".Packages[#i].RejectReason := "REJ_INVALID";
+	                END_IF;
+
+	                "DB_Packages".Packages[#i].Status := "PKG_SORTING";
+	            END_IF;
+
+	            // S6 Kontrolle: Hier muss die Lichtschranke das Paket sehen
+	            IF #oldPos < "POS_S6" AND #newPos >= "POS_S6" AND NOT #Inputs.SortEntry THEN
+	                "DB_Packages".Packages[#i].Status := "PKG_ERROR";
+	                #PackageLost := TRUE;
+	            END_IF;
+
+	            // Bandende: nicht ausgeschleust -> Ausschuss
+	            IF "DB_Packages".Packages[#i].Status <> "PKG_ERROR" AND #newPos >= "POS_BELT_END" THEN
+	                "DB_Packages".Packages[#i].ExitNo := "TARGET_REJECT";
+	                "DB_Packages".Packages[#i].ExitTimer := T#0S;
+	                IF "DB_Packages".Packages[#i].Target >= "TARGET_METAL"
+	                    AND "DB_Packages".Packages[#i].Target <= "TARGET_PLASTIC_LARGE"
+	                THEN
+	                    "DB_Packages".Packages[#i].RejectReason := "REJ_MISSORT";
+	                    #Missort := TRUE;
+	                END_IF;
+	            END_IF;
+	        END_IF;
+	    END_FOR;
+	END_REGION
+
+	REGION Neues Paket an S1
+	    // Die Lichtschranke schaltet, wenn die Paketvorderkante sie erreicht:
+	    // Paketmitte liegt dann eine halbe Paketlänge davor
+	    IF #infeedEdge THEN
+	        #slot := 0;
+	        FOR #i := 1 TO "MAX_PACKAGES" DO
+	            IF #slot = 0 AND "DB_Packages".Packages[#i].Status = "PKG_EMPTY" THEN
+	                #slot := #i;
+	            END_IF;
+	        END_FOR;
+
+	        IF #slot > 0 THEN
+	            "DB_Packages".Packages[#slot].ID := "DB_Packages".NextId;
+	            "DB_Packages".NextId := "DB_Packages".NextId + 1;
+	            "DB_Packages".Packages[#slot].Status := "PKG_DETECTED";
+	            "DB_Packages".Packages[#slot].Position := "POS_ST1" - "SENSOR_WINDOW";
+	            "DB_Packages".Packages[#slot].Size := "SIZE_UNKNOWN";
+	            "DB_Packages".Packages[#slot].Material := "MAT_UNKNOWN";
+	            "DB_Packages".Packages[#slot].Weight := 0.0;
+	            "DB_Packages".Packages[#slot].QualityOk := FALSE;
+	            "DB_Packages".Packages[#slot].SizeMeasured := FALSE;
+	            "DB_Packages".Packages[#slot].MaterialMeasured := FALSE;
+	            "DB_Packages".Packages[#slot].WeightMeasured := FALSE;
+	            "DB_Packages".Packages[#slot].QualityMeasured := FALSE;
+	            "DB_Packages".Packages[#slot].Target := "TARGET_NONE";
+	            "DB_Packages".Packages[#slot].RejectReason := "REJ_NONE";
+	            "DB_Packages".Packages[#slot].TransitTime := T#0S;
+	            "DB_Packages".Packages[#slot].ExitNo := 0;
+	            "DB_Packages".Packages[#slot].ExitTimer := T#0S;
+	        ELSE
+	            // Mehr Pakete als Plätze: dieses Paket kann nicht verfolgt werden
+	            #PackageLost := TRUE;
+	        END_IF;
+	    END_IF;
+	END_REGION
+
+	REGION Ausgänge überwachen
+	    // Steigende Flanke an einer Ausgangs-Lichtschranke dem ältesten Paket zuordnen, das in diesen Ausgang läuft
+	    FOR #k := 1 TO 4 DO
+	        IF #exitEdge[#k] THEN
+	            #oldest := 0;
+	            #oldestTime := T#0S;
+	            FOR #i := 1 TO "MAX_PACKAGES" DO
+	                IF "DB_Packages".Packages[#i].Status = "PKG_SORTING"
+	                    AND "DB_Packages".Packages[#i].ExitNo = #k
+	                    AND ("DB_Packages".Packages[#i].ExitTimer >= #oldestTime OR #oldest = 0)
+	                THEN
+	                    #oldest := #i;
+	                    #oldestTime := "DB_Packages".Packages[#i].ExitTimer;
+	                END_IF;
+	            END_FOR;
+
+	            IF #oldest > 0 THEN
+	                IF #k = "TARGET_REJECT" THEN
+	                    "DB_Packages".Packages[#oldest].Status := "PKG_REJECTED";
+	                ELSE
+	                    "DB_Packages".Packages[#oldest].Status := "PKG_SORTED";
+	                END_IF;
+	            END_IF;
+	        END_IF;
+	    END_FOR;
+
+	    // Zeitüberwachung und Durchlaufzeit
+	    #activeCount := 0;
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        #status := "DB_Packages".Packages[#i].Status;
+	        IF #status <> "PKG_EMPTY" THEN
+	            #activeCount := #activeCount + 1;
+	        END_IF;
+
+	        IF #status = "PKG_DETECTED" OR #status = "PKG_INSPECTION" OR #status = "PKG_SORTING" THEN
+	            "DB_Packages".Packages[#i].TransitTime := "DB_Packages".Packages[#i].TransitTime + "CYCLE_TIME";
+
+	            IF "DB_Packages".Packages[#i].ExitNo > 0 THEN
+	                "DB_Packages".Packages[#i].ExitTimer := "DB_Packages".Packages[#i].ExitTimer + "CYCLE_TIME";
+	                IF "DB_Packages".Packages[#i].ExitTimer > "EXIT_TIMEOUT" THEN
+	                    "DB_Packages".Packages[#i].Status := "PKG_ERROR";
+	                    #ExitTimeout := TRUE;
+	                END_IF;
+	            END_IF;
+	        END_IF;
+	    END_FOR;
+	    "DB_Packages".ActiveCount := #activeCount;
+	END_REGION
+END_FUNCTION_BLOCK

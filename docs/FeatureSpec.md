@@ -80,6 +80,8 @@ Felder von `UDT_Workpiece`:
 | Target | Int | `TARGET_NONE` … `TARGET_REJECT` |
 | RejectReason | Int | `REJ_NONE` … `REJ_SCALE_FAULT` |
 | TransitTime | Time | Zeit seit Einlauf, für die Statistik |
+| ExitNo | Int | 0 = auf dem Band, 1–4 = Ausgang, in den das Paket gerade läuft |
+| ExitTimer | Time | Zeit seit Verlassen des Bandes, Überwachung bis zur Ausgangs-Lichtschranke |
 
 Die Codes sind PLC-Konstanten, siehe [Constants.csv](../src/Constants/Constants.csv). Ein eigenes Geschwindigkeitsfeld je Paket entfällt, weil das Band mit konstanter Geschwindigkeit läuft.
 

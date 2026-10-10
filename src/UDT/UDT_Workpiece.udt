@@ -20,6 +20,8 @@ VERSION : 0.1
       Target : Int;   // TARGET_NONE .. TARGET_REJECT, festgelegt an ST5
       RejectReason : Int;   // REJ_NONE .. REJ_SCALE_FAULT
       TransitTime : Time;   // Zeit seit Einlauf, für Statistik (Durchlaufzeit)
+      ExitNo : Int;   // 0 = auf dem Band, 1..4 = Ausgang, in den das Paket gerade läuft
+      ExitTimer : Time;   // Zeit seit Verlassen des Bandes, Überwachung bis zur Ausgangs-Lichtschranke
    END_STRUCT;
 
 END_TYPE
