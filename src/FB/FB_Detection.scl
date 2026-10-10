@@ -41,6 +41,8 @@ VERSION : 0.1
       step : Real;
       oldPos : Real;
       newPos : Real;
+      weightKg : Real;
+      grams : DInt;
       infeedEdge : Bool;
       exitEdge : Array[1..4] of Bool;
       oldest : Int;
@@ -114,14 +116,18 @@ BEGIN
 	                "DB_Packages".Packages[#i].MaterialMeasured := TRUE;
 	            END_IF;
 
-	            // ST4 Gewicht: Rohwert 0..SCALE_RAW_MAX entspricht 0..SCALE_KG_MAX
+	            // ST4 Gewicht: Rohwert 0..SCALE_RAW_MAX entspricht 0..SCALE_KG_MAX.
+	            // Auf Gramm gerundet wie eine Waagenanzeige: Ein Digit sind ca. 0,36 g, ungerundet
+	            // würde z. B. 0,5 kg als 0,49985 kg gemessen und fälschlich als zu leicht bewertet.
 	            IF #oldPos < "POS_ST4" AND #newPos >= "POS_ST4" THEN
 	                IF #Inputs.WeightRaw < 0 OR #Inputs.WeightRaw > "SCALE_RAW_MAX" THEN
 	                    "DB_Packages".Packages[#i].Weight := 0.0;
 	                    "DB_Packages".Packages[#i].RejectReason := "REJ_SCALE_FAULT";
 	                    #ScaleFault := TRUE;
 	                ELSE
-	                    "DB_Packages".Packages[#i].Weight := INT_TO_REAL(#Inputs.WeightRaw) * "SCALE_KG_MAX" / INT_TO_REAL("SCALE_RAW_MAX");
+	                    #weightKg := INT_TO_REAL(#Inputs.WeightRaw) * "SCALE_KG_MAX" / INT_TO_REAL("SCALE_RAW_MAX");
+	                    #grams := ROUND(#weightKg * 1000.0);
+	                    "DB_Packages".Packages[#i].Weight := DINT_TO_REAL(#grams) / 1000.0;
 	                    "DB_Packages".Packages[#i].WeightMeasured := TRUE;
 	                END_IF;
 	            END_IF;

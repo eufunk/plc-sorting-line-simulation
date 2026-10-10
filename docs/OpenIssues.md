@@ -92,4 +92,4 @@ Build-Skript über TIA Portal Openness: Quellen aus `src/` automatisch importier
 
 In der Azure-VM (OI-001) läuft weder McAfee noch die intelligente App-Steuerung – dort kann Openness erneut getestet werden.
 
-Aufräumen auf dem Laptop: Die McAfee-Ausnahme für `TiaProbe.exe` wird nicht mehr gebraucht und kann entfernt werden.
+Aufräumen auf dem Laptop: Die McAfee-Ausnahme für `TiaProbe.exe` wurde am 2026-10-10 wieder entfernt.
