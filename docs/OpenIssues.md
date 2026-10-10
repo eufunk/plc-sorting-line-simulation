@@ -2,7 +2,7 @@
 
 ## OI-001: PLCSIM läuft nicht auf dem Entwicklungs-Laptop
 
-**Status:** Lösung gewählt (Windows-VM bei Microsoft Azure), Einrichtung ausstehend · **Erfasst:** 2026-10-09 · **Blockiert:** Tests ab Phase 3, HMI-Simulation in Phase 4
+**Status:** ✅ gelöst 2026-10-10 – PLCSIM V21 läuft in einer Windows-VM bei Microsoft Azure, CPU `PLC_SortingLine` geladen und in RUN. Anleitung: [Anleitung_Azure-VM.md](Anleitung_Azure-VM.md) · **Erfasst:** 2026-10-09
 
 ### Befund
 
@@ -50,14 +50,14 @@ Einrichten erst, wenn alle Bausteine auf dem Laptop fehlerfrei übersetzen – s
 | Punkt | Plan |
 |---|---|
 | Anbieter | **Microsoft Azure** (gewählt 2026-10-09): Windows-Standardfall, Portal auf Deutsch, RDP-Datei per Klick, eingebautes Auto-Shutdown. AWS wäre möglich, ist aber umständlicher (Schlüsselpaar für das Windows-Passwort, Konsole teils nur Englisch). Aktuelle Preise und Startguthaben für Neukunden beim Einrichten prüfen. |
-| Image | **Windows Server 2022 Datacenter** – Windows-Lizenz im Preis enthalten (Windows 11 bräuchte in Azure eine eigene, passende Lizenz). Vorher in der Liesmich der TIA-ISO prüfen, ob Windows Server 2022 unterstützt wird. |
-| Größe | z. B. **D4s_v5**: 4 vCPU, 16 GB RAM; 128 GB SSD |
-| Kostenschutz | **Auto-Shutdown** beim Erstellen aktivieren (z. B. täglich 22:00, VM wird dabei freigegeben) und ein **Budget mit E-Mail-Alarm** anlegen (z. B. 20 €) |
+| Image | **Windows Server 2022 Datacenter: Azure Edition** – Windows-Lizenz im Preis enthalten (Windows 11 bräuchte in Azure eine eigene, passende Lizenz). Laut Liesmich der TIA-ISO unterstützt (Server 2022/2025 Vollinstallation, Hyper-V-Gast). |
+| Größe | **D4as_v6**: 4 vCPU, 16 GB RAM; 128 GB Standard-SSD (DSv5 hatte kein Kontingent) |
+| Kostenschutz | **Auto-Shutdown** täglich 20:00 (VM wird dabei freigegeben) und **Budget „TIA-Test“** 20 € mit E-Mail-Alarm |
 | Zugriff | Remotedesktop (RDP) vom Laptop – läuft auch auf ARM |
-| Software | TIA Portal V21 + S7-PLCSIM V21 (ISOs per Download direkt in der VM), eigene 21-Tage-Trial |
-| Projekt übertragen | Archiv `.zap21` über OneDrive oder Kopieren per RDP; entpacken in der VM nach `C:\TIA\` |
+| Software | TIA Portal V21 + S7-PLCSIM V21 (ISOs per robocopy vom Laptop, SHA256 geprüft), eigene 21-Tage-Trial |
+| Projekt übertragen | Archiv `.zap21` per RDP-Laufwerksfreigabe (`\\tsclient\C`) kopieren, in der VM nach `C:\TIA\` dearchivieren |
 | Kosten sparen | VM nach jedem Test **stoppen und freigeben** (deallocate) – dann fällt nur der Speicher an |
-| Zu prüfen | PLCSIM V21 startet in der VM (virtuelle CPU) – erster Test direkt nach der Installation |
+| Ergebnis | PLCSIM V21 startet in der VM, Instanz `PLC_SortingLine` (192.168.0.1) geladen, RUN, kein ERROR (2026-10-10) |
 
 ### Weitere Optionen (nicht gewählt)
 
