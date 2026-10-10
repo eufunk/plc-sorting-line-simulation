@@ -70,3 +70,26 @@ Einrichten erst, wenn alle Bausteine auf dem Laptop fehlerfrei übersetzen – s
 ### Vorgehen bis zur Lösung
 
 Lokal ohne Simulation weiterarbeiten: Konstanten, UDTs und DBs importieren und übersetzen, Phase-3-Bausteine schreiben und fehlerfrei übersetzen.
+
+## OI-002: TIA Portal Openness auf dem Laptop blockiert
+
+**Status:** zurückgestellt · **Erfasst:** 2026-10-10 · **Blockiert:** nichts (Import und Übersetzen weiter von Hand)
+
+### Ziel
+
+Build-Skript über TIA Portal Openness: Quellen aus `src/` automatisch importieren, übersetzen, Fehler als Text ausgeben.
+
+### Stand
+
+- Openness-DLLs vorhanden: `C:\Program Files\Siemens\Automation\Portal V21\PublicAPI\V21\net48\`
+- Benutzer ist in der Gruppe **Siemens TIA Openness** (eingerichtet 2026-10-10)
+- Testprogramm [`tools/openness/TiaProbe.cs`](../tools/openness/TiaProbe.cs) übersetzt als x64 mit `tools/openness/build.cmd`
+- Ausführung blockiert:
+  1. **McAfee** stellt die `.exe` unter Quarantäne → Datei-Ausnahme eingerichtet
+  2. **Intelligente App-Steuerung** (Smart App Control) von Windows 11 ist aktiv und blockiert unsignierte Programme. Keine Ausnahmen möglich, nur komplettes Ausschalten – und das ist ohne Neuinstallation nicht umkehrbar. **Nicht ausschalten.**
+
+### Weiteres Vorgehen
+
+In der Azure-VM (OI-001) läuft weder McAfee noch die intelligente App-Steuerung – dort kann Openness erneut getestet werden.
+
+Aufräumen auf dem Laptop: Die McAfee-Ausnahme für `TiaProbe.exe` wird nicht mehr gebraucht und kann entfernt werden.

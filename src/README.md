@@ -19,7 +19,7 @@ Abhängigkeiten zuerst:
 1. **Konstanten** und **I/O-Variablen** – UDTs und Bausteine verwenden sie.
 2. **UDTs**
 3. **Datenbausteine**
-4. **Funktionen und Funktionsbausteine** – aufgerufene vor aufrufenden: `FC_Random`, `FB_Simulation`, `FB_InputMapping`, `FB_OutputMapping`, zuletzt `FB_Main`
+4. **Funktionen und Funktionsbausteine** – aufgerufene vor aufrufenden: `FC_Random`, `FB_Simulation`, `FB_InputMapping`, `FB_OutputMapping`, `FB_Plant`, `FB_Conveyor`, zuletzt `FB_Main` (danach `IDB_Main` neu generieren bzw. beim Übersetzen aktualisieren lassen)
 5. **Organisationsbausteine** – siehe unten, OB30 wird von Hand angelegt
 
 ## Konstanten und I/O-Variablen importieren

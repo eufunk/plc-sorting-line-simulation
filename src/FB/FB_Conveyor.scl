@@ -1,0 +1,50 @@
+FUNCTION_BLOCK "FB_Conveyor"
+TITLE = Förderband M1
+{ S7_Optimized_Access := 'TRUE' }
+// Band läuft, wenn FB_Plant es freigibt (Automatik oder Handbetrieb), eine Anforderung
+// anliegt und der Motorschutz in Ordnung ist. Ausgang: DB_IO.Outputs.Conveyor (M1).
+// Der Alarm "Motorschutz ausgelöst" wird in FB_Alarms gebildet.
+VERSION : 0.1
+   VAR_INPUT
+      MotorProtectOk : Bool;   // B2 Motorschutz in Ordnung
+   END_VAR
+
+   VAR_IN_OUT
+      Conveyor : "UDT_Conveyor";   // Zustand und Anforderungen (DB_Plant.Conveyor)
+      Outputs : "UDT_IoOutputs";   // Ausgangsabbild
+   END_VAR
+
+   VAR
+      tickCounter : Int;   // Durchläufe für den Betriebsstundenzähler
+   END_VAR
+
+   VAR CONSTANT
+      TICKS_PER_SECOND : Int := 10;   // 10 x 100 ms
+   END_VAR
+
+
+BEGIN
+	#Conveyor.Fault := NOT #MotorProtectOk;
+
+	#Conveyor.Run := #Conveyor.Enable
+	                 AND (#Conveyor.AutoRequest OR #Conveyor.ManualRequest)
+	                 AND NOT #Conveyor.Fault;
+
+	// Ohne Rückmeldekontakt gilt das Band als laufend, solange es angesteuert ist
+	// und der Motorschutz nicht ausgelöst hat
+	#Conveyor.Running := #Conveyor.Run AND #MotorProtectOk;
+
+	IF #Conveyor.Running THEN
+	    #Conveyor.Speed := "BELT_SPEED";
+
+	    #tickCounter := #tickCounter + 1;
+	    IF #tickCounter >= #TICKS_PER_SECOND THEN
+	        #tickCounter := 0;
+	        #Conveyor.RunSeconds := #Conveyor.RunSeconds + 1;
+	    END_IF;
+	ELSE
+	    #Conveyor.Speed := 0.0;
+	END_IF;
+
+	#Outputs.Conveyor := #Conveyor.Run;
+END_FUNCTION_BLOCK

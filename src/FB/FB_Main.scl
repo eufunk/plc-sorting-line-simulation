@@ -13,6 +13,8 @@ VERSION : 0.1
    VAR
       Simulation : "FB_Simulation";
       InputMapping : "FB_InputMapping";
+      Plant : "FB_Plant";
+      Conveyor : "FB_Conveyor";
       OutputMapping : "FB_OutputMapping";
    END_VAR
 
@@ -30,11 +32,16 @@ BEGIN
 	              Inputs := "DB_IO".Inputs);
 
 	// 3. Steuerlogik
-	//    folgt: FB_Plant (Anlagenzustand, Betriebsarten)
-	//           FB_Conveyor
-	//           FB_Detection (Paketverfolgung, Stationen ST1–ST5)
+	//    folgt: FB_Alarms (vor FB_Plant: wertet RESET aus, bevor FB_Plant die Tasten zurücksetzt)
+	#Plant(Inputs := "DB_IO".Inputs,
+	       Outputs := "DB_IO".Outputs);
+	
+	#Conveyor(MotorProtectOk := "DB_IO".Inputs.MotorProtectOk,
+	          Conveyor := "DB_Plant".Conveyor,
+	          Outputs := "DB_IO".Outputs);
+	
+	//    folgt: FB_Detection (Paketverfolgung, Stationen ST1–ST5)
 	//           FB_Sorting
-	//           FB_Alarms
 	//           FB_Counters
 
 	// 4. Ausgänge

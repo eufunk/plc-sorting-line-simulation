@@ -47,3 +47,10 @@ build/
 dist/
 temp/
 tmp/
+
+# ================================
+# Werkzeuge
+# ================================
+
+# Übersetzte Openness-Programme (werden aus den .cs-Quellen erzeugt)
+tools/openness/*.exe

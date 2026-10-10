@@ -1,0 +1,159 @@
+FUNCTION_BLOCK "FB_Plant"
+TITLE = Anlagenzustand und Betriebsarten
+{ S7_Optimized_Access := 'TRUE' }
+// Zustandsautomat der Anlage (docs/Anlagenkonfiguration.md, Abschnitt 6):
+//   OFF -> READY      Grundstellung erreicht
+//   READY -> AUTO     Taste START (Schalter auf Auto)
+//   READY -> MANUAL   Schalter auf Hand
+//   AUTO -> READY     Taste STOPP oder Schalter auf Hand
+//   MANUAL -> READY   Schalter auf Auto
+//   READY/AUTO/MANUAL -> FAULT   Störungsalarm gespeichert
+//   FAULT -> OFF      alle Störungen zurückgesetzt (RESET in FB_Alarms)
+//   jeder Zustand -> EMERGENCY   Not-Halt;  EMERGENCY -> OFF   Not-Halt entriegelt + RESET
+// Setzt die Anforderungen an Band und Sortierer für Automatik und Handbetrieb
+// sowie die Leuchten H1 (Betrieb) und H2 (Störung).
+// Muss NACH FB_Alarms aufgerufen werden: FB_Alarms wertet RESET aus, dieser Baustein setzt die Tasten zurück.
+VERSION : 0.1
+   VAR_IN_OUT
+      Inputs : "UDT_IoInputs";   // Eingangsabbild
+      Outputs : "UDT_IoOutputs";   // Ausgangsabbild (Leuchten)
+   END_VAR
+
+   VAR
+      blinkCounter : Int;   // Zählt Durchläufe für den Blinktakt
+      blink : Bool;   // Blinktakt 1 Hz
+   END_VAR
+
+   VAR_TEMP
+      s : Int;
+      state : Int;
+      allRetracted : Bool;
+      anyFault : Bool;
+   END_VAR
+
+   VAR CONSTANT
+      BLINK_TICKS : Int := 5;   // 5 x 100 ms = 0,5 s an, 0,5 s aus
+   END_VAR
+
+
+BEGIN
+	REGION Blinktakt
+	    #blinkCounter := #blinkCounter + 1;
+	    IF #blinkCounter >= #BLINK_TICKS THEN
+	        #blinkCounter := 0;
+	        #blink := NOT #blink;
+	    END_IF;
+	END_REGION
+
+	REGION Grundstellung
+	    #allRetracted := TRUE;
+	    FOR #s := 1 TO "SORTER_COUNT" DO
+	        IF NOT #Inputs.SorterRetracted[#s] THEN
+	            #allRetracted := FALSE;
+	        END_IF;
+	    END_FOR;
+
+	    #anyFault := "DB_Plant".Alarm.AnyFault;
+	    "DB_Plant".HomePosition := #allRetracted AND NOT #anyFault AND #Inputs.EmergencyStopOk;
+	END_REGION
+
+	REGION Zustandsautomat
+	    #state := "DB_Plant".State;
+
+	    IF NOT #Inputs.EmergencyStopOk THEN
+	        #state := "PLANT_EMERGENCY";
+
+	    ELSIF #state = "PLANT_OFF" THEN
+	        IF "DB_Plant".HomePosition THEN
+	            #state := "PLANT_READY";
+	        END_IF;
+
+	    ELSIF #state = "PLANT_READY" THEN
+	        IF #anyFault THEN
+	            #state := "PLANT_FAULT";
+	        ELSIF "DB_Hmi".Plant.SelectManual THEN
+	            #state := "PLANT_MANUAL";
+	        ELSIF "DB_Hmi".Plant.Start THEN
+	            #state := "PLANT_AUTO";
+	        ELSIF NOT "DB_Plant".HomePosition THEN
+	            #state := "PLANT_OFF";
+	        END_IF;
+
+	    ELSIF #state = "PLANT_AUTO" THEN
+	        IF #anyFault THEN
+	            #state := "PLANT_FAULT";
+	        ELSIF "DB_Hmi".Plant.Stop OR "DB_Hmi".Plant.SelectManual THEN
+	            #state := "PLANT_READY";
+	        END_IF;
+
+	    ELSIF #state = "PLANT_MANUAL" THEN
+	        IF #anyFault THEN
+	            #state := "PLANT_FAULT";
+	        ELSIF NOT "DB_Hmi".Plant.SelectManual THEN
+	            #state := "PLANT_READY";
+	        END_IF;
+
+	    ELSIF #state = "PLANT_FAULT" THEN
+	        IF NOT #anyFault THEN
+	            #state := "PLANT_OFF";
+	        END_IF;
+
+	    ELSIF #state = "PLANT_EMERGENCY" THEN
+	        // Not-Halt ist hier bereits entriegelt (sonst erster Zweig)
+	        IF "DB_Hmi".Plant.Reset THEN
+	            #state := "PLANT_OFF";
+	        END_IF;
+
+	    ELSE
+	        #state := "PLANT_OFF";
+	    END_IF;
+
+	    "DB_Plant".State := #state;
+	END_REGION
+
+	REGION Anforderungen an Band und Sortierer
+	    "DB_Plant".Conveyor.Enable := #state = "PLANT_AUTO" OR #state = "PLANT_MANUAL";
+	    "DB_Plant".Conveyor.AutoRequest := #state = "PLANT_AUTO";
+
+	    IF #state = "PLANT_MANUAL" THEN
+	        "DB_Plant".Conveyor.ManualRequest := "DB_Hmi".Manual.ConveyorRun;
+	        FOR #s := 1 TO "SORTER_COUNT" DO
+	            "DB_Plant".Sorters[#s].ManualRequest := "DB_Hmi".Manual.SorterExtend[#s];
+	        END_FOR;
+	    ELSE
+	        // Außerhalb des Handbetriebs Handbedienung zurücksetzen,
+	        // damit beim nächsten Wechsel in Hand nichts sofort losläuft
+	        "DB_Plant".Conveyor.ManualRequest := FALSE;
+	        "DB_Hmi".Manual.ConveyorRun := FALSE;
+	        FOR #s := 1 TO "SORTER_COUNT" DO
+	            "DB_Plant".Sorters[#s].ManualRequest := FALSE;
+	            "DB_Hmi".Manual.SorterExtend[#s] := FALSE;
+	        END_FOR;
+	    END_IF;
+	END_REGION
+
+	REGION Leuchten
+	    // H1 Betrieb: Dauerlicht = Automatik läuft, Blinken = bereit oder Handbetrieb
+	    IF #state = "PLANT_AUTO" THEN
+	        #Outputs.LampRun := TRUE;
+	    ELSIF #state = "PLANT_READY" OR #state = "PLANT_MANUAL" THEN
+	        #Outputs.LampRun := #blink;
+	    ELSE
+	        #Outputs.LampRun := FALSE;
+	    END_IF;
+
+	    // H2 Störung: Blinken = Not-Halt oder unquittierte Alarme, Dauerlicht = quittierte Störung
+	    IF #state = "PLANT_EMERGENCY" OR "DB_Plant".Alarm.Flash THEN
+	        #Outputs.LampFault := #blink;
+	    ELSE
+	        #Outputs.LampFault := #anyFault;
+	    END_IF;
+	END_REGION
+
+	REGION Tasten zurücksetzen
+	    // HMI-Tasten wirken nur für einen Durchlauf
+	    "DB_Hmi".Plant.Start := FALSE;
+	    "DB_Hmi".Plant.Stop := FALSE;
+	    "DB_Hmi".Plant.Reset := FALSE;
+	END_REGION
+END_FUNCTION_BLOCK
