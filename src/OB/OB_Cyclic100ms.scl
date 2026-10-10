@@ -8,7 +8,7 @@ TITLE = Weckalarm 100 ms
 // Anlegen in TIA Portal (der OB-Typ lässt sich über eine Quelle nicht sicher festlegen):
 //   Neuen Baustein hinzufügen -> Organisationsbaustein -> Cyclic interrupt
 //   Name: OB_Cyclic100ms, Nummer: 30, Taktzeit: 100000 µs, Sprache: SCL
-//   Dann die Zeile unter BEGIN einfügen. Den Instanz-DB IDB_Main legt TIA beim Übersetzen an.
+//   Dann die Zeile unter BEGIN einfügen. Den Instanz-DB IDB_Main aus src/DB/IDB_Main.db generieren.
 VERSION : 0.1
 
 BEGIN

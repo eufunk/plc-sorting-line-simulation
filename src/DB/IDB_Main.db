@@ -1,0 +1,12 @@
+DATA_BLOCK "IDB_Main"
+TITLE = Instanz-DB von FB_Main
+{ S7_Optimized_Access := 'TRUE' }
+// Instanzdaten des Hauptbausteins, aufgerufen aus OB30 (OB_Cyclic100ms).
+// Enthält die Multiinstanzen von FB_Simulation, FB_InputMapping, FB_OutputMapping usw.
+VERSION : 0.1
+NON_RETAIN
+"FB_Main"
+
+BEGIN
+
+END_DATA_BLOCK

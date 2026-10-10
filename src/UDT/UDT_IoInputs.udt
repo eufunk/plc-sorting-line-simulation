@@ -12,7 +12,7 @@ VERSION : 0.1
       Metal : Bool;   // S3  %I0.4  Metall erkannt
       QualityOk : Bool;   // S5  %I0.5  Qualität OK
       SortEntry : Bool;   // S6  %I0.6  Paket am Beginn der Sortierstrecke
-      Exit : Array[1..4] of Bool;   // S7..S10  %I0.7..%I1.2  Paket in Ausgang 1..4
+      ExitSensor : Array[1..4] of Bool;   // S7..S10  %I0.7..%I1.2  Paket in Ausgang 1..4
       SorterRetracted : Array[1..3] of Bool;   // S11/S13/S15  Sortierer eingefahren
       SorterExtended : Array[1..3] of Bool;   // S12/S14/S16  Sortierer ausgefahren
       WeightRaw : Int;   // S4  %IW64  Waage, 0..27648 = 0..10 kg

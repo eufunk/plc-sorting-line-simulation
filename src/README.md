@@ -68,9 +68,14 @@ Den Typ eines Organisationsbausteins legt eine Quelle nicht sicher fest. Deshalb
 1. *Programmbausteine* → *Neuen Baustein hinzufügen* → *Organisationsbaustein* → **Cyclic interrupt**
 2. Name `OB_Cyclic100ms`, Nummer **30**, Taktzeit **100000 µs**, Sprache **SCL**
 3. Inhalt aus `OB/OB_Cyclic100ms.scl` übernehmen: die Zeile `"IDB_Main"();`
-4. Übersetzen – TIA legt den Instanz-DB `IDB_Main` an (Abfrage bestätigen).
+4. Den Instanz-DB aus der Quelle `DB/IDB_Main.db` generieren (erst nach `FB_Main`). TIA legt ihn **nicht** automatisch an, wenn der Aufruf von Hand getippt wird.
+5. Übersetzen.
 
 `Main [OB1]` bleibt leer: Das gesamte Programm läuft im 100-ms-Takt von OB30.
+
+## Namensregel
+
+Variablen- und Feldnamen dürfen keine SCL-Schlüsselwörter sein (z. B. `EXIT`, `RETURN`, `CONTINUE`, `CASE`, `REGION`). TIA nimmt solche Namen in UDTs zwar an, der Zugriff im SCL-Code (`#Inputs.Exit[1]`) scheitert dann aber mit *„Ungültige Variablendefinition … Bezeichner erwartet“*.
 
 ## Nach Änderungen in TIA Portal
 

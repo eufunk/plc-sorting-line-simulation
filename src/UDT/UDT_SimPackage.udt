@@ -13,7 +13,7 @@ VERSION : 0.1
       Material : Int;   // MAT_METAL / MAT_PLASTIC
       Weight : Real;   // Gewicht in kg (0,2..8,0)
       QualityOk : Bool;   // TRUE = Qualität OK
-      Exit : Int;   // 0 = noch auf dem Band, 1..4 = Ausgang, in dem das Paket gelandet ist
+      ExitNo : Int;   // 0 = noch auf dem Band, 1..4 = Ausgang, in dem das Paket gelandet ist
       ExitTimer : Time;   // Laufzeit in der Rutsche bis zur Ausgangs-Lichtschranke
    END_STRUCT;
 

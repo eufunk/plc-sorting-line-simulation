@@ -111,7 +111,7 @@ BEGIN
 	                        AND "DB_Simulation".Internal.SorterPosition[#s] >= #SORTER_CONTACT
 	                    THEN
 	                        "DB_Simulation".Packages[#i].OnBelt := FALSE;
-	                        "DB_Simulation".Packages[#i].Exit := #s;
+	                        "DB_Simulation".Packages[#i].ExitNo := #s;
 	                        "DB_Simulation".Packages[#i].ExitTimer := T#0S;
 	                    END_IF;
 	                END_FOR;
@@ -119,7 +119,7 @@ BEGIN
 	                // Nicht ausgeschleust: fällt am Bandende in den Ausschuss
 	                IF "DB_Simulation".Packages[#i].OnBelt AND #pos >= "POS_BELT_END" THEN
 	                    "DB_Simulation".Packages[#i].OnBelt := FALSE;
-	                    "DB_Simulation".Packages[#i].Exit := "TARGET_REJECT";
+	                    "DB_Simulation".Packages[#i].ExitNo := "TARGET_REJECT";
 	                    "DB_Simulation".Packages[#i].ExitTimer := T#0S;
 	                END_IF;
 	            ELSE
@@ -167,7 +167,7 @@ BEGIN
 	        "DB_Simulation".Packages[#freeSlot].ID := "DB_Simulation".Internal.NextId;
 	        "DB_Simulation".Packages[#freeSlot].Position := 0.0;
 	        "DB_Simulation".Packages[#freeSlot].OnBelt := TRUE;
-	        "DB_Simulation".Packages[#freeSlot].Exit := 0;
+	        "DB_Simulation".Packages[#freeSlot].ExitNo := 0;
 	        "DB_Simulation".Packages[#freeSlot].ExitTimer := T#0S;
 	        "DB_Simulation".Internal.NextId := "DB_Simulation".Internal.NextId + 1;
 
@@ -235,7 +235,7 @@ BEGIN
 	    #inputs.SortEntry := FALSE;
 	    #inputs.WeightRaw := 0;
 	    FOR #s := 1 TO 4 DO
-	        #inputs.Exit[#s] := FALSE;
+	        #inputs.ExitSensor[#s] := FALSE;
 	    END_FOR;
 
 	    FOR #i := 1 TO "MAX_PACKAGES" DO
@@ -261,11 +261,11 @@ BEGIN
 	                IF ABS(#pos - "POS_S6") <= "SENSOR_WINDOW" AND NOT "DB_Simulation".Faults.SortEntrySensorDefect THEN
 	                    #inputs.SortEntry := TRUE;
 	                END_IF;
-	            ELSIF "DB_Simulation".Packages[#i].Exit >= 1 AND "DB_Simulation".Packages[#i].Exit <= 4 THEN
+	            ELSIF "DB_Simulation".Packages[#i].ExitNo >= 1 AND "DB_Simulation".Packages[#i].ExitNo <= 4 THEN
 	                IF "DB_Simulation".Packages[#i].ExitTimer >= #EXIT_SENSOR_ON
 	                    AND "DB_Simulation".Packages[#i].ExitTimer < #EXIT_SENSOR_OFF
 	                THEN
-	                    #inputs.Exit["DB_Simulation".Packages[#i].Exit] := TRUE;
+	                    #inputs.ExitSensor["DB_Simulation".Packages[#i].ExitNo] := TRUE;
 	                END_IF;
 	            END_IF;
 	        END_IF;

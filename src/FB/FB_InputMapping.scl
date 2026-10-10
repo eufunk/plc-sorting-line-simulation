@@ -28,10 +28,10 @@ BEGIN
 	    #Inputs.QualityOk := "iQualityOk";
 	    #Inputs.SortEntry := "iSortEntry";
 
-	    #Inputs.Exit[1] := "iExit1";
-	    #Inputs.Exit[2] := "iExit2";
-	    #Inputs.Exit[3] := "iExit3";
-	    #Inputs.Exit[4] := "iExitReject";
+	    #Inputs.ExitSensor[1] := "iExit1";
+	    #Inputs.ExitSensor[2] := "iExit2";
+	    #Inputs.ExitSensor[3] := "iExit3";
+	    #Inputs.ExitSensor[4] := "iExitReject";
 
 	    #Inputs.SorterRetracted[1] := "iSorter1Retracted";
 	    #Inputs.SorterExtended[1] := "iSorter1Extended";
