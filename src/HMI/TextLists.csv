@@ -1,0 +1,41 @@
+Liste;Bereich;Wert;Text
+TL_PlantState;Decimal;0;AUS
+TL_PlantState;Decimal;1;BEREIT
+TL_PlantState;Decimal;2;AUTOMATIK
+TL_PlantState;Decimal;3;HAND
+TL_PlantState;Decimal;4;STÖRUNG
+TL_PlantState;Decimal;5;NOT-HALT
+TL_PkgStatus;Decimal;0;–
+TL_PkgStatus;Decimal;1;wartet
+TL_PkgStatus;Decimal;2;unterwegs
+TL_PkgStatus;Decimal;3;erkannt
+TL_PkgStatus;Decimal;4;Prüfung
+TL_PkgStatus;Decimal;5;Sortierung
+TL_PkgStatus;Decimal;6;sortiert
+TL_PkgStatus;Decimal;7;Ausschuss
+TL_PkgStatus;Decimal;8;FEHLER
+TL_Target;Decimal;0;–
+TL_Target;Decimal;1;A1 Metall
+TL_Target;Decimal;2;A2 Kunststoff klein
+TL_Target;Decimal;3;A3 Kunststoff groß
+TL_Target;Decimal;4;A4 Ausschuss
+TL_Material;Decimal;0;?
+TL_Material;Decimal;1;Metall
+TL_Material;Decimal;2;Kunststoff
+TL_Size;Decimal;0;?
+TL_Size;Decimal;1;klein
+TL_Size;Decimal;2;groß
+TL_Reason;Decimal;0;–
+TL_Reason;Decimal;1;Qualität
+TL_Reason;Decimal;2;zu leicht
+TL_Reason;Decimal;3;zu schwer
+TL_Reason;Decimal;4;ungültig
+TL_Reason;Decimal;5;Fehlsortierung
+TL_Reason;Decimal;6;Waage defekt
+TL_SorterState;Decimal;0;eingefahren
+TL_SorterState;Decimal;1;fährt aus
+TL_SorterState;Decimal;2;ausgefahren
+TL_SorterState;Decimal;3;fährt ein
+TL_SorterState;Decimal;9;STÖRUNG
+TL_Quality;Bit;0;Ausschuss
+TL_Quality;Bit;1;OK
