@@ -19,6 +19,9 @@ NON_RETAIN
       Statistics : Struct   // Statistikbild
          Reset : Bool;   // Taste Zähler zurücksetzen
       END_STRUCT;
+      Display : Struct   // Anzeigewerte, geschrieben von FC_HmiData
+         PackagePos : Array[1.."MAX_PACKAGES"] of Int;   // Paketposition in 0,1 % (0..1000) – Bewegungsanimationen brauchen Ganzzahlen
+      END_STRUCT;
    END_VAR
 
 

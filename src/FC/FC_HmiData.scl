@@ -1,0 +1,19 @@
+FUNCTION "FC_HmiData" : Void
+TITLE = Anzeigewerte für das HMI
+{ S7_Optimized_Access := 'TRUE' }
+// Bereitet Werte auf, die das Bedienpanel nicht direkt verwenden kann, nach DB_Hmi.Display.
+// Bewegungsanimationen auf Comfort Panels akzeptieren nur ganzzahlige Variablen:
+// Paketposition 0,0..100,0 % -> 0..1000.
+VERSION : 0.1
+   VAR_TEMP
+      i : Int;
+   END_VAR
+
+
+BEGIN
+	FOR #i := 1 TO "MAX_PACKAGES" DO
+	    "DB_Hmi".Display.PackagePos[#i] := REAL_TO_INT(LIMIT(MN := 0.0,
+	                                                        IN := "DB_Packages".Packages[#i].Position * 10.0,
+	                                                        MX := 1000.0));
+	END_FOR;
+END_FUNCTION

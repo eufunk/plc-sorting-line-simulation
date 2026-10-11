@@ -10,6 +10,7 @@ TITLE = Hauptbaustein der Sortieranlage
 //   2. Eingänge       – DB_IO.Inputs aus Simulation oder Hardware
 //   3. Steuerlogik    – Anlagenzustand, Band, Paketverfolgung, Sortierung, Alarme, Statistik
 //   4. Ausgänge       – DB_IO.Outputs auf die Hardware
+//   5. HMI            – Anzeigewerte für das Bedienpanel (DB_Hmi.Display)
 // Reihenfolge in Schritt 3: Detection, Sorting und Alarms werten RESET aus,
 // danach setzt FB_Plant die HMI-Tasten zurück. FB_Counters zählt zuletzt.
 VERSION : 0.1
@@ -71,4 +72,7 @@ BEGIN
 	// 4. Ausgänge
 	#OutputMapping(SimMode := "DB_IO".SimMode,
 	               Outputs := "DB_IO".Outputs);
+
+	// 5. Anzeigewerte für das HMI
+	"FC_HmiData"();
 END_FUNCTION_BLOCK

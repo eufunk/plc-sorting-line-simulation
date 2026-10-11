@@ -103,7 +103,7 @@ Die vier Navigationstasten hat der Gerätewizard angelegt (senkrecht links) – 
 
 | Animation | Einstellung |
 |---|---|
-| *Horizontal movement* | Tag `"DB_Packages".Packages[n].Position`, Bereich **0 … 100**, Start-x **120**, End-x **1120** |
+| *Horizontale Bewegung* | Variable `"DB_Hmi".Display.PackagePos[n]` (Ganzzahl, 0,1 %), Bereich **0 … 1000**, Start-X **120**, Ziel-X **1120**. `Position` selbst ist ein Real – den nimmt die Bewegungsanimation nicht an. |
 | *Visibility* | Tag `"DB_Packages".Packages[n].Status`, *Visible* im Bereich **3 … 5** (erkannt bis Sortierung) |
 | *Appearance* (Hintergrund) | Tag `"DB_Packages".Packages[n].Target`: 0 weiß (Ziel noch offen) · 1 blaugrau · 2 hellgrün · 3 dunkelgrün · 4 rot |
 
