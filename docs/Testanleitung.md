@@ -1,13 +1,50 @@
 # Testanleitung – Funktionstest in PLCSIM
 
-Testfälle 001–013 aus der [FeatureSpec, Abschnitt 13](FeatureSpec.md#13-testfälle), durchgeführt in der Azure-VM ([Anleitung_Azure-VM.md](Anleitung_Azure-VM.md)). Solange es noch kein HMI gibt, wird die Anlage über eine **Beobachtungstabelle** bedient und beobachtet.
+Testfälle 001–013 aus der [FeatureSpec, Abschnitt 13](FeatureSpec.md#13-testfälle), durchgeführt in der Azure-VM ([Anleitung_Azure-VM.md](Anleitung_Azure-VM.md)).
+
+Zwei Wege:
+
+- **Automatisch (empfohlen):** `FB_TestRunner` fährt alle Tests selbst ab und schreibt Ergebnisse und ein Protokoll nach `DB_Test` – Abschnitt 0.
+- **Von Hand** über eine Beobachtungstabelle – Abschnitte 1–9. Nützlich, um einen fehlgeschlagenen Test Schritt für Schritt nachzuvollziehen.
+
+## 0. Automatischer Testablauf
+
+Vorbereitung wie in Abschnitt 1 (importieren, übersetzen, archivieren, in der VM laden). Zusätzlich zu importieren: `DB/DB_Test.db`, `FC/FC_TestLog.scl`, `FB/FB_TestRunner.scl`, danach `FB/FB_Main.scl` und `DB/IDB_Main.db`.
+
+1. In der VM `DB_Test` öffnen → **Monitor all**.
+2. In der Beobachtungstabelle eine Zeile `"DB_Test".Start` ergänzen → `TRUE` → **Modify now**. (Oder direkt im geöffneten `DB_Test`: Rechtsklick auf `Start` → *Modify operand*.)
+3. Warten, bis `Running` = FALSE und `Done` = TRUE – etwa 8–10 Minuten. `CurrentTest` und `CurrentStep` zeigen den Fortschritt.
+4. Ergebnis: `Passed` / `Failed` und `Results[1..13]` aufklappen. Screenshot an Claude.
+
+| Feld in `Results[n]` | Bedeutung |
+|---|---|
+| `Status` | 0 offen · 1 läuft · 2 **OK** · 3 **FEHLER** |
+| `FailStep`, `FailCheck` | wo der Test scheiterte: Schritt in `FB_TestRunner` und Nummer der Prüfung darin; 99 = Zeitüberschreitung |
+| `Target`, `Reason`, `Weight` | gemessene Werte des Testpakets (Tests 1–8) |
+| `Duration` | Dauer des Tests |
+
+**Protokoll** `Log[1..LogCount]`: jeder Zustandswechsel mit Zeit `T` seit Teststart und laufendem `Test`.
+
+| `Event` | Bedeutung | `Id` | `Value` |
+|---|---|---|---|
+| 1 | Anlagenzustand | – | `State` (Abschnitt 3) |
+| 2 | Paketstatus | Paket-ID | `Status` |
+| 3 | Sortiererzustand | Sortierer 1–3 | `State` |
+| 4 | Alarme | – | `Latched` als Zahl |
+| 5 | Test beginnt | – | Testnummer |
+| 6 | Testergebnis | Schritt des Fehlers | 2 OK / 3 FEHLER |
+| 7 | Prüfung falsch | Schritt | Nummer der Prüfung |
+
+Abbrechen: `"DB_Test".Abort` = TRUE. Der Ablauf hebt alle simulierten Störungen auf und hält an.
+
+Der Testablauf läuft nur im Simulationsbetrieb (`DB_IO.SimMode` = TRUE) und greift ohne `Start` nicht ein.
 
 ## 1. Vorbereitung
 
 1. **Laptop:** geänderte Quellen importieren und übersetzen.
 2. **Laptop:** Beobachtungstabelle anlegen (Abschnitt 2) – auf dem Laptop, damit sie im Archiv steckt. Eine nur in der VM angelegte Tabelle geht beim nächsten Dearchivieren verloren.
 3. **Laptop:** Projekt archivieren (`C:\TIA\Archiv\SortingLine.zap21`).
-4. Azure-Portal → `vm-tia` → **Starten**, dann `C:\TIA\vm-tia.rdp`.
+4. Azure-Portal → `vm-tia` → **Starten** → **Verbinden → Zugriff überprüfen**. Kein grüner Haken (eigene IP hat sich geändert, passiert oft über Nacht): **Netzwerk → Netzwerkeinstellungen** → Regel **RDP** → Quelle **My IP address** → Speichern. Dann `C:\TIA\vm-tia.rdp`.
 5. **VM:** TIA Portal schließen, den alten Projektordner `C:\TIA\SortingLine` löschen, Archiv holen und dearchivieren:
    ```
    robocopy \\tsclient\C\TIA\Archiv C:\TIA SortingLine.zap21 /Z
@@ -18,7 +55,7 @@ Testfälle 001–013 aus der [FeatureSpec, Abschnitt 13](FeatureSpec.md#13-testf
 
 Auf dem Laptop: Projektbaum → `PLC_SortingLine` → **Watch and force tables → Add new watch table** → Name `WT_Test`. Die Tabelle wird mit dem Projekt archiviert; in der VM öffnen und dort beobachten.
 
-Die folgenden Zeilen markieren, kopieren und in der Tabelle in die erste Zelle der Spalte **Name** einfügen (Strg+V). Klappt das Einfügen nicht, die Namen einzeln eintippen – TIA ergänzt beim Tippen.
+Die folgenden Zeilen in Excel einfügen (eine Variable pro Zeile in Spalte A), dort Spalte A markieren und kopieren, dann in TIA die erste leere Zelle der Spalte **Name** anklicken und Strg+V – TIA legt alle Zeilen auf einmal an. Aus einem Texteditor kopiert, nimmt TIA nur eine Zeile. Alternative: Strukturen aus dem geöffneten DB per Drag & Drop in die Tabelle ziehen.
 
 ```
 "DB_Plant".State

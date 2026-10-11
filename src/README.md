@@ -19,7 +19,7 @@ Abhängigkeiten zuerst:
 1. **Konstanten** und **I/O-Variablen** – UDTs und Bausteine verwenden sie.
 2. **UDTs**
 3. **Datenbausteine**
-4. **Funktionen und Funktionsbausteine** – aufgerufene vor aufrufenden: `FC_Random`, `FB_Simulation`, `FB_InputMapping`, `FB_OutputMapping`, `FB_Detection`, `FB_Sorting`, `FB_Alarms`, `FB_Plant`, `FB_Conveyor`, `FB_Counters`, zuletzt `FB_Main` (danach `IDB_Main` neu generieren bzw. beim Übersetzen aktualisieren lassen)
+4. **Funktionen und Funktionsbausteine** – aufgerufene vor aufrufenden: `FC_Random`, `FC_TestLog`, `FB_Simulation`, `FB_InputMapping`, `FB_OutputMapping`, `FB_Detection`, `FB_Sorting`, `FB_Alarms`, `FB_Plant`, `FB_Conveyor`, `FB_Counters`, `FB_TestRunner`, zuletzt `FB_Main` (danach `IDB_Main` neu generieren bzw. beim Übersetzen aktualisieren lassen)
 5. **Organisationsbausteine** – siehe unten, OB30 wird von Hand angelegt
 
 ## Konstanten und I/O-Variablen importieren
@@ -56,6 +56,7 @@ Wie bei den UDTs: `.db`-Dateien unter *Externe Quellen* hinzufügen → *Baustei
 | `DB_Statistics` | Zähler und Kennzahlen | ja |
 | `DB_Hmi` | Tasten und Eingaben vom Bedienpanel | nein |
 | `DB_Simulation` | simulierte Pakete, Erzeugung, Störungen | nein |
+| `DB_Test` | automatischer Funktionstest: Start, Ergebnisse, Protokoll | nein |
 
 ## Funktionsbausteine importieren
 

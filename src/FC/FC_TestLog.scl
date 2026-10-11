@@ -1,0 +1,35 @@
+FUNCTION "FC_TestLog" : Void
+TITLE = Eintrag ins Testprotokoll
+{ S7_Optimized_Access := 'TRUE' }
+// Schreibt einen Eintrag in DB_Test.Log (Ereignis-Codes: siehe DB_Test).
+// Ist das Log voll, wird der Eintrag verworfen und LogFull gesetzt.
+VERSION : 0.1
+   VAR_INPUT
+      Event : Int;   // Ereignis-Code
+      Id : DInt;   // Paket-ID, Sortierer oder Schritt
+      Value : Int;   // neuer Wert
+   END_VAR
+
+   VAR_TEMP
+      n : Int;
+   END_VAR
+
+   VAR CONSTANT
+      LOG_SIZE : Int := 500;
+   END_VAR
+
+
+BEGIN
+	#n := "DB_Test".LogCount + 1;
+	IF #n > #LOG_SIZE THEN
+	    "DB_Test".LogFull := TRUE;
+	    RETURN;
+	END_IF;
+
+	"DB_Test".Log[#n].T := "DB_Test".Elapsed;
+	"DB_Test".Log[#n].Test := "DB_Test".CurrentTest;
+	"DB_Test".Log[#n].Event := #Event;
+	"DB_Test".Log[#n].Id := #Id;
+	"DB_Test".Log[#n].Value := #Value;
+	"DB_Test".LogCount := #n;
+END_FUNCTION

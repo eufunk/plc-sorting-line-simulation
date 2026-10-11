@@ -9,7 +9,8 @@ TITLE = Sortierer Q1..Q3
 //   RETRACTING -> RETRACTED   Endlage eingefahren erreicht
 //   jede Bewegung -> FAULT    Endlage nicht innerhalb SORTER_TIMEOUT oder beide Endlagen belegt
 //   FAULT -> RETRACTING       RESET (Kolben fährt zurück, Überwachung läuft erneut)
-// Außerhalb von Automatik und Handbetrieb fahren alle Sortierer zurück.
+// Bei Anlagenstörung und Not-Halt fahren alle Sortierer sofort zurück. Bei STOPP fährt ein
+// begonnener Hub zu Ende und danach zurück; ein neuer Hub beginnt nur in Automatik und Hand.
 // Die Fehlerbits werden in FB_Alarms zu Alarmen.
 VERSION : 0.1
    VAR_INPUT
@@ -145,8 +146,10 @@ BEGIN
 	        END_IF;
 	    END_REGION
 
-	    REGION Nur in Automatik und Hand bewegen
-	        IF NOT (#autoMode OR #manualMode) THEN
+	    REGION Bei Störung und Not-Halt sofort zurückfahren
+	        // Bei STOPP (READY) oder OFF fährt ein begonnener Hub zu Ende: Der Kolben hat das Paket
+	        // womöglich schon vom Band geschoben, und erst die Endlage ausgefahren meldet es an FB_Detection.
+	        IF #PlantState = "PLANT_FAULT" OR #PlantState = "PLANT_EMERGENCY" THEN
 	            "DB_Plant".Sorters[#s].Extend := FALSE;
 	            IF "DB_Plant".Sorters[#s].State = "SORTER_EXTENDING"
 	                OR "DB_Plant".Sorters[#s].State = "SORTER_EXTENDED"

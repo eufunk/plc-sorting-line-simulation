@@ -103,7 +103,7 @@ Offenes RDP aus dem ganzen Internet ist ein bekanntes Angriffsziel. Deshalb nur 
 2. Eingangsportregel **RDP** anklicken.
 3. **Quelle:** *Meine IP-Adresse* → **Speichern**.
 
-Ändert sich deine IP-Adresse (z. B. neuer Router-Neustart, anderes WLAN), die Regel hier erneut auf „Meine IP-Adresse“ setzen.
+Ändert sich deine IP-Adresse (bei vielen Anbietern über Nacht, nach einem Router-Neustart, in einem anderen WLAN), die Regel hier erneut auf „Meine IP-Adresse“ setzen. Erkennbar: RDP verbindet nicht, **Verbinden → Zugriff überprüfen** zeigt keinen grünen Haken. Deshalb nach jedem Start der VM zuerst **Zugriff überprüfen**.
 
 ## 5. Verbinden
 

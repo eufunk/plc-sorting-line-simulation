@@ -1,0 +1,779 @@
+FUNCTION_BLOCK "FB_TestRunner"
+TITLE = Automatischer Funktionstest 001-013
+{ S7_Optimized_Access := 'TRUE' }
+// Fährt die Testfälle aus docs/FeatureSpec.md, Abschnitt 13, selbstständig nacheinander ab:
+// erzeugt Testpakete, löst simulierte Störungen aus, betätigt START/STOPP/RESET wie das HMI
+// und prüft die erwarteten Werte. Bedienung und Ergebnisse: DB_Test.
+// Läuft nur im Simulationsbetrieb und muss in FB_Main VOR FB_Simulation und FB_Plant
+// aufgerufen werden: Seine Vorgaben wirken so noch im selben Durchlauf.
+// Schrittnummern: 1xx Vorbereitung, 2xx Tests 1-8, 3xx Test 9, 4xx Test 10, 5xx Test 11,
+// 6xx Test 12, 7xx Test 13, 8xx Auswertung und Wiederherstellung, 9xx Ende.
+// Prüfung 99 = Zeitüberschreitung.
+VERSION : 0.1
+   VAR
+      step : Int;   // aktueller Schritt
+      prevStep : Int;   // Schritt im vorherigen Durchlauf
+      stepTimer : Time;   // Zeit im aktuellen Schritt
+      testTimer : Time;   // Zeit im aktuellen Test
+      testNo : Int;   // aktueller Test 1..13
+      failed : Bool;   // aktueller Test fehlgeschlagen
+      sub : Int;   // Test 8: 0 = Paket mit 0,5 kg, 1 = Paket mit 5,0 kg
+      retries : Int;   // Test 9: Anzahl Füllversuche
+      expMaterial : Int;   // Vorgaben des Testpakets
+      expSize : Int;
+      expWeight : Real;
+      expQuality : Bool;
+      expTarget : Int;   // erwartetes Ziel = erwarteter Ausgang
+      expReason : Int;   // erwarteter Ausschussgrund
+      pkgId : DInt;   // ID, die die Steuerung dem Testpaket geben wird
+      seenSorting : Bool;   // Testpaket wurde im Status SORTING gesehen
+      seenTarget : Int;   // dort gemessene Werte
+      seenReason : Int;
+      seenWeight : Real;
+      exitBefore : Array[1..4] of DInt;   // Zähler vor dem Test
+      totalBefore : DInt;
+      errorsBefore : DInt;
+      lastState : Int;   // für das Protokoll: Werte im vorherigen Durchlauf
+      lastPkgStatus : Array[1.."MAX_PACKAGES"] of Int;
+      lastPkgId : Array[1.."MAX_PACKAGES"] of DInt;
+      lastSorter : Array[1.."SORTER_COUNT"] of Int;
+      lastLatched : Word;
+   END_VAR
+
+   VAR_TEMP
+      i : Int;
+      k : Int;
+      t : Int;
+      check : Int;   // Nummer der ersten falschen Prüfung, 0 = alles richtig
+      simEmpty : Bool;   // kein simuliertes Paket mehr vorhanden
+      idle : Bool;   // Automatik, keine Pakete
+      ok : Bool;
+      found : Bool;
+      expCount : DInt;
+      id : DInt;
+   END_VAR
+
+   VAR CONSTANT
+      CHECK_TIMEOUT : Int := 99;
+      RES_OPEN : Int := 0;
+      RES_RUNNING : Int := 1;
+      RES_OK : Int := 2;
+      RES_FAILED : Int := 3;
+      TEST_COUNT : Int := 13;
+   END_VAR
+
+
+BEGIN
+	REGION Bedienung
+	    IF "DB_Test".Abort THEN
+	        "DB_Test".Abort := FALSE;
+	        IF "DB_Test".Running THEN
+	            #step := 950;
+	        END_IF;
+	    END_IF;
+
+	    IF "DB_Test".Start THEN
+	        "DB_Test".Start := FALSE;
+	        IF NOT "DB_Test".Running THEN
+	            "DB_Test".Running := TRUE;
+	            "DB_Test".Done := FALSE;
+	            "DB_Test".Aborted := FALSE;
+	            "DB_Test".Passed := 0;
+	            "DB_Test".Failed := 0;
+	            "DB_Test".Elapsed := T#0S;
+	            "DB_Test".CurrentTest := 0;
+	            "DB_Test".LogCount := 0;
+	            "DB_Test".LogFull := FALSE;
+	            FOR #t := 1 TO #TEST_COUNT DO
+	                "DB_Test".Results[#t].Status := #RES_OPEN;
+	                "DB_Test".Results[#t].FailStep := 0;
+	                "DB_Test".Results[#t].FailCheck := 0;
+	                "DB_Test".Results[#t].Target := 0;
+	                "DB_Test".Results[#t].Reason := 0;
+	                "DB_Test".Results[#t].Weight := 0.0;
+	                "DB_Test".Results[#t].Duration := T#0S;
+	            END_FOR;
+	            // Ungültige Vorwerte: Der erste Durchlauf protokolliert den Ausgangszustand
+	            #lastState := -1;
+	            FOR #i := 1 TO "MAX_PACKAGES" DO
+	                #lastPkgStatus[#i] := -1;
+	                #lastPkgId[#i] := 0;
+	            END_FOR;
+	            FOR #i := 1 TO "SORTER_COUNT" DO
+	                #lastSorter[#i] := -1;
+	            END_FOR;
+	            #lastLatched := 16#FFFF;
+	            #testNo := 0;
+	            #prevStep := -1;
+	            #step := 100;
+	        END_IF;
+	    END_IF;
+
+	    IF NOT "DB_Test".Running THEN
+	        RETURN;
+	    END_IF;
+	END_REGION
+
+	REGION Zeiten
+	    "DB_Test".Elapsed := "DB_Test".Elapsed + "CYCLE_TIME";
+	    #testTimer := #testTimer + "CYCLE_TIME";
+	    IF #step <> #prevStep THEN
+	        #stepTimer := T#0S;
+	        #prevStep := #step;
+	    ELSE
+	        #stepTimer := #stepTimer + "CYCLE_TIME";
+	    END_IF;
+	    "DB_Test".CurrentStep := #step;
+	END_REGION
+
+	REGION Protokoll
+	    IF "DB_Plant".State <> #lastState THEN
+	        "FC_TestLog"(Event := 1, Id := 0, Value := "DB_Plant".State);
+	        #lastState := "DB_Plant".State;
+	    END_IF;
+
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        IF "DB_Packages".Packages[#i].ID <> 0 THEN
+	            #id := "DB_Packages".Packages[#i].ID;
+	        ELSE
+	            #id := #lastPkgId[#i];   // Platz gerade freigegeben: ID des letzten Pakets
+	        END_IF;
+	        IF "DB_Packages".Packages[#i].Status <> #lastPkgStatus[#i] THEN
+	            "FC_TestLog"(Event := 2, Id := #id, Value := "DB_Packages".Packages[#i].Status);
+	            #lastPkgStatus[#i] := "DB_Packages".Packages[#i].Status;
+	        END_IF;
+	        #lastPkgId[#i] := #id;
+	    END_FOR;
+
+	    FOR #i := 1 TO "SORTER_COUNT" DO
+	        IF "DB_Plant".Sorters[#i].State <> #lastSorter[#i] THEN
+	            "FC_TestLog"(Event := 3, Id := INT_TO_DINT(#i), Value := "DB_Plant".Sorters[#i].State);
+	            #lastSorter[#i] := "DB_Plant".Sorters[#i].State;
+	        END_IF;
+	    END_FOR;
+
+	    IF "DB_Plant".Alarm.Latched <> #lastLatched THEN
+	        "FC_TestLog"(Event := 4, Id := 0, Value := WORD_TO_INT("DB_Plant".Alarm.Latched));
+	        #lastLatched := "DB_Plant".Alarm.Latched;
+	    END_IF;
+	END_REGION
+
+	REGION Hilfswerte
+	    #simEmpty := TRUE;
+	    FOR #i := 1 TO "MAX_PACKAGES" DO
+	        IF "DB_Simulation".Packages[#i].Active THEN
+	            #simEmpty := FALSE;
+	        END_IF;
+	    END_FOR;
+	    #idle := "DB_Plant".State = "PLANT_AUTO" AND "DB_Packages".ActiveCount = 0 AND #simEmpty;
+	END_REGION
+
+	REGION Ablauf
+	    #check := 0;
+
+	    CASE #step OF
+	        // ---------- Vorbereitung ----------
+	        100:  // Simulation in einen definierten Zustand bringen
+	            "DB_Simulation".Settings.AutoGenerate := FALSE;
+	            "DB_Simulation".ManualPackage.Generate := FALSE;
+	            FOR #i := 1 TO "SORTER_COUNT" DO
+	                "DB_Simulation".Faults.SorterBlocked[#i] := FALSE;
+	                "DB_Simulation".Faults.SorterStuck[#i] := FALSE;
+	            END_FOR;
+	            "DB_Simulation".Faults.SortEntrySensorDefect := FALSE;
+	            "DB_Simulation".Faults.MotorProtectTripped := FALSE;
+	            "DB_Simulation".Faults.EmergencyStop := FALSE;
+	            "DB_Simulation".Faults.ScaleDefect := FALSE;
+	            "DB_Hmi".Plant.SelectManual := FALSE;
+	            "DB_Hmi".Plant.Reset := TRUE;
+	            #step := 101;
+
+	        101:  // Automatik einschalten
+	            IF "DB_Plant".State = "PLANT_AUTO" THEN
+	                #step := 103;
+	            ELSIF "DB_Plant".State = "PLANT_READY" THEN
+	                "DB_Hmi".Plant.Start := TRUE;
+	                #step := 102;
+	            ELSIF #stepTimer > T#10S THEN
+	                #step := 950;
+	            END_IF;
+
+	        102:
+	            IF "DB_Plant".State = "PLANT_AUTO" THEN
+	                #step := 103;
+	            ELSIF #stepTimer > T#3S THEN
+	                #step := 950;
+	            END_IF;
+
+	        103:  // Restliche Pakete laufen lassen, dann Statistik und Alarme zurücksetzen
+	            IF #idle THEN
+	                "DB_Hmi".Statistics.Reset := TRUE;
+	                "DB_Hmi".Plant.Reset := TRUE;
+	                #testNo := 1;
+	                #step := 200;
+	            ELSIF #stepTimer > T#45S THEN
+	                #step := 950;
+	            END_IF;
+
+	        // ---------- Test beginnen ----------
+	        200:
+	            IF #testNo > #TEST_COUNT THEN
+	                #step := 900;
+	            ELSE
+	                "DB_Test".CurrentTest := #testNo;
+	                "DB_Test".Results[#testNo].Status := #RES_RUNNING;
+	                "FC_TestLog"(Event := 5, Id := 0, Value := #testNo);
+	                #failed := FALSE;
+	                #testTimer := T#0S;
+	                #sub := 0;
+	                #step := 205;
+	            END_IF;
+
+	        205:  // Warten, bis die Anlage leer ist und in Automatik steht; Warnungen quittieren
+	            IF #stepTimer = T#0S THEN
+	                "DB_Hmi".Plant.Reset := TRUE;
+	            END_IF;
+	            IF #idle AND "DB_Plant".Alarm.Latched = 16#0000 AND #stepTimer >= T#300MS THEN
+	                FOR #k := 1 TO 4 DO
+	                    #exitBefore[#k] := "DB_Statistics".Statistics.ExitCount[#k];
+	                END_FOR;
+	                #totalBefore := "DB_Statistics".Statistics.Total;
+	                #errorsBefore := "DB_Statistics".Statistics.Errors;
+	                IF #testNo <= 8 THEN
+	                    #step := 210;
+	                ELSIF #testNo = 9 THEN
+	                    #step := 300;
+	                ELSIF #testNo = 10 THEN
+	                    #step := 400;
+	                ELSIF #testNo = 11 THEN
+	                    #step := 500;
+	                ELSIF #testNo = 12 THEN
+	                    #step := 600;
+	                ELSE
+	                    #step := 700;
+	                END_IF;
+	            ELSIF #stepTimer > T#45S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        // ---------- Tests 1-8: Sortierung ----------
+	        210:  // Testpaket erzeugen
+	            #k := #testNo;
+	            IF #testNo = 8 AND #sub = 1 THEN
+	                #k := 9;
+	            END_IF;
+	            #expQuality := TRUE;
+	            #expWeight := 2.0;
+	            #expReason := "REJ_NONE";
+	            CASE #k OF
+	                1:  // Metall, klein
+	                    #expMaterial := "MAT_METAL";
+	                    #expSize := "SIZE_SMALL";
+	                    #expTarget := "TARGET_METAL";
+	                2:  // Metall, groß
+	                    #expMaterial := "MAT_METAL";
+	                    #expSize := "SIZE_LARGE";
+	                    #expTarget := "TARGET_METAL";
+	                3:  // Kunststoff, klein
+	                    #expMaterial := "MAT_PLASTIC";
+	                    #expSize := "SIZE_SMALL";
+	                    #expTarget := "TARGET_PLASTIC_SMALL";
+	                4:  // Kunststoff, groß
+	                    #expMaterial := "MAT_PLASTIC";
+	                    #expSize := "SIZE_LARGE";
+	                    #expTarget := "TARGET_PLASTIC_LARGE";
+	                5:  // Qualität Ausschuss
+	                    #expMaterial := "MAT_METAL";
+	                    #expSize := "SIZE_SMALL";
+	                    #expQuality := FALSE;
+	                    #expTarget := "TARGET_REJECT";
+	                    #expReason := "REJ_QUALITY";
+	                6:  // zu leicht
+	                    #expMaterial := "MAT_METAL";
+	                    #expSize := "SIZE_SMALL";
+	                    #expWeight := 0.3;
+	                    #expTarget := "TARGET_REJECT";
+	                    #expReason := "REJ_UNDERWEIGHT";
+	                7:  // zu schwer
+	                    #expMaterial := "MAT_METAL";
+	                    #expSize := "SIZE_SMALL";
+	                    #expWeight := 6.0;
+	                    #expTarget := "TARGET_REJECT";
+	                    #expReason := "REJ_OVERWEIGHT";
+	                8:  // Untergrenze gilt als OK
+	                    #expMaterial := "MAT_PLASTIC";
+	                    #expSize := "SIZE_SMALL";
+	                    #expWeight := 0.5;
+	                    #expTarget := "TARGET_PLASTIC_SMALL";
+	                ELSE  // 9 = Test 8b: Obergrenze gilt als OK
+	                    #expMaterial := "MAT_PLASTIC";
+	                    #expSize := "SIZE_LARGE";
+	                    #expWeight := 5.0;
+	                    #expTarget := "TARGET_PLASTIC_LARGE";
+	            END_CASE;
+
+	            "DB_Simulation".ManualPackage.Material := #expMaterial;
+	            "DB_Simulation".ManualPackage.Size := #expSize;
+	            "DB_Simulation".ManualPackage.Weight := #expWeight;
+	            "DB_Simulation".ManualPackage.QualityOk := #expQuality;
+	            "DB_Simulation".ManualPackage.Generate := TRUE;
+	            #pkgId := "DB_Packages".NextId;
+	            #seenSorting := FALSE;
+	            #seenTarget := 0;
+	            #seenReason := 0;
+	            #seenWeight := 0.0;
+	            #step := 220;
+
+	        220:  // Paket verfolgen, bis es gezählt ist
+	            FOR #i := 1 TO "MAX_PACKAGES" DO
+	                IF "DB_Packages".Packages[#i].ID = #pkgId
+	                    AND "DB_Packages".Packages[#i].Status = "PKG_SORTING"
+	                THEN
+	                    #seenSorting := TRUE;
+	                    #seenTarget := "DB_Packages".Packages[#i].Target;
+	                    #seenReason := "DB_Packages".Packages[#i].RejectReason;
+	                    #seenWeight := "DB_Packages".Packages[#i].Weight;
+	                END_IF;
+	            END_FOR;
+	            IF "DB_Statistics".Statistics.Total > #totalBefore THEN
+	                #step := 230;
+	            ELSIF #stepTimer > T#35S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        230:  // Ergebnis prüfen
+	            "DB_Test".Results[#testNo].Target := #seenTarget;
+	            "DB_Test".Results[#testNo].Reason := #seenReason;
+	            "DB_Test".Results[#testNo].Weight := #seenWeight;
+
+	            #ok := TRUE;
+	            FOR #k := 1 TO 4 DO
+	                #expCount := #exitBefore[#k];
+	                IF #k = #expTarget THEN
+	                    #expCount := #expCount + 1;
+	                END_IF;
+	                IF "DB_Statistics".Statistics.ExitCount[#k] <> #expCount THEN
+	                    #ok := FALSE;
+	                END_IF;
+	            END_FOR;
+
+	            IF NOT #seenSorting THEN
+	                #check := 1;
+	            ELSIF #seenTarget <> #expTarget THEN
+	                #check := 2;
+	            ELSIF #seenReason <> #expReason THEN
+	                #check := 3;
+	            ELSIF ABS(#seenWeight - #expWeight) > 0.001 THEN
+	                #check := 4;
+	            ELSIF NOT #ok THEN
+	                #check := 5;
+	            ELSIF "DB_Plant".Alarm.Latched <> 16#0000 THEN
+	                #check := 6;
+	            ELSIF #testNo = 8 AND #sub = 0 THEN
+	                #sub := 1;   // zweites Paket von Test 8
+	                #step := 205;
+	            ELSE
+	                #step := 800;
+	            END_IF;
+
+	        // ---------- Test 9: höchstens 5 Pakete ----------
+	        300:
+	            "DB_Simulation".Settings.AutoGenerate := TRUE;
+	            #retries := 0;
+	            #step := 301;
+
+	        301:  // Band füllen, bei 5 Paketen anhalten
+	            IF "DB_Plant".State = "PLANT_AUTO" AND "DB_Packages".ActiveCount >= "MAX_PACKAGES" THEN
+	                "DB_Hmi".Plant.Stop := TRUE;
+	                #step := 302;
+	            ELSIF #stepTimer > T#120S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        302:  // Beruhigen lassen: Pakete in der Rutsche geben ihren Platz noch frei
+	            IF "DB_Plant".State = "PLANT_READY" AND #stepTimer >= T#2S THEN
+	                IF "DB_Packages".ActiveCount >= "MAX_PACKAGES" THEN
+	                    // 5 Pakete liegen auf dem stehenden Band: 6. Paket anfordern
+	                    "DB_Simulation".Settings.AutoGenerate := FALSE;
+	                    "DB_Simulation".ManualPackage.Material := "MAT_METAL";
+	                    "DB_Simulation".ManualPackage.Size := "SIZE_SMALL";
+	                    "DB_Simulation".ManualPackage.Weight := 2.0;
+	                    "DB_Simulation".ManualPackage.QualityOk := TRUE;
+	                    "DB_Simulation".ManualPackage.Generate := TRUE;
+	                    #step := 303;
+	                ELSIF #retries < 10 THEN
+	                    // Platz wurde frei: weiterlaufen lassen und erneut füllen
+	                    #retries := #retries + 1;
+	                    "DB_Hmi".Plant.Start := TRUE;
+	                    #step := 301;
+	                ELSE
+	                    #check := 1;
+	                END_IF;
+	            ELSIF #stepTimer > T#5S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        303:  // Es darf nicht erzeugt werden
+	            IF #stepTimer >= T#3S THEN
+	                IF NOT "DB_Simulation".ManualPackage.Generate THEN
+	                    #check := 1;
+	                ELSIF "DB_Packages".ActiveCount <> "MAX_PACKAGES" THEN
+	                    #check := 2;
+	                ELSIF ("DB_Plant".Alarm.Latched AND 16#0200) <> 16#0000 THEN
+	                    #check := 3;
+	                ELSE
+	                    "DB_Hmi".Plant.Start := TRUE;
+	                    #step := 304;
+	                END_IF;
+	            END_IF;
+
+	        304:  // Sobald Platz frei ist, wird das wartende Paket erzeugt
+	            IF NOT "DB_Simulation".ManualPackage.Generate THEN
+	                #step := 305;
+	            ELSIF #stepTimer > T#40S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        305:
+	            IF #idle THEN
+	                IF "DB_Plant".Alarm.Latched <> 16#0000 THEN
+	                    #check := 1;
+	                ELSIF "DB_Statistics".Statistics.Errors <> #errorsBefore THEN
+	                    #check := 2;
+	                ELSE
+	                    #step := 800;
+	                END_IF;
+	            ELSIF #stepTimer > T#60S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        // ---------- Test 10: Sortierer 1 blockiert ----------
+	        400:
+	            "DB_Simulation".Faults.SorterBlocked[1] := TRUE;
+	            "DB_Simulation".ManualPackage.Material := "MAT_METAL";
+	            "DB_Simulation".ManualPackage.Size := "SIZE_SMALL";
+	            "DB_Simulation".ManualPackage.Weight := 2.0;
+	            "DB_Simulation".ManualPackage.QualityOk := TRUE;
+	            "DB_Simulation".ManualPackage.Generate := TRUE;
+	            #step := 401;
+
+	        401:  // Alarm, Band steht
+	            IF "DB_Plant".State = "PLANT_FAULT" THEN
+	                IF ("DB_Plant".Alarm.Latched AND 16#0004) = 16#0000 THEN
+	                    #check := 1;
+	                ELSIF "DB_Plant".Sorters[1].State <> "SORTER_FAULT" THEN
+	                    #check := 2;
+	                ELSIF "DB_Plant".Conveyor.Running THEN
+	                    #check := 3;
+	                ELSE
+	                    "DB_Simulation".Faults.SorterBlocked[1] := FALSE;
+	                    "DB_Hmi".Plant.Reset := TRUE;
+	                    #step := 402;
+	                END_IF;
+	            ELSIF #stepTimer > T#25S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        402:  // Nach RESET wieder bereit
+	            IF "DB_Plant".State = "PLANT_READY" AND "DB_Plant".Sorters[1].State = "SORTER_RETRACTED" THEN
+	                "DB_Hmi".Plant.Start := TRUE;
+	                #step := 403;
+	            ELSIF #stepTimer > T#5S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        403:  // Paket ist am Sortierer vorbei: Ausschuss mit Warnung Fehlsortierung
+	            IF "DB_Statistics".Statistics.Total > #totalBefore THEN
+	                IF "DB_Statistics".Statistics.ExitCount[4] <> #exitBefore[4] + 1 THEN
+	                    #check := 1;
+	                ELSIF ("DB_Plant".Alarm.Latched AND 16#0800) = 16#0000 THEN
+	                    #check := 2;
+	                ELSIF "DB_Plant".State <> "PLANT_AUTO" THEN
+	                    #check := 3;
+	                ELSE
+	                    "DB_Hmi".Plant.Reset := TRUE;
+	                    #step := 404;
+	                END_IF;
+	            ELSIF #stepTimer > T#30S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        404:
+	            IF #stepTimer >= T#300MS THEN
+	                IF "DB_Plant".Alarm.Latched <> 16#0000 THEN
+	                    #check := 1;
+	                ELSE
+	                    #step := 800;
+	                END_IF;
+	            END_IF;
+
+	        // ---------- Test 11: Sortierer 1 klemmt beim Zurückfahren ----------
+	        500:
+	            "DB_Simulation".Faults.SorterStuck[1] := TRUE;
+	            "DB_Simulation".ManualPackage.Material := "MAT_METAL";
+	            "DB_Simulation".ManualPackage.Size := "SIZE_SMALL";
+	            "DB_Simulation".ManualPackage.Weight := 2.0;
+	            "DB_Simulation".ManualPackage.QualityOk := TRUE;
+	            "DB_Simulation".ManualPackage.Generate := TRUE;
+	            #step := 501;
+
+	        501:  // Paket ausgeschleust, dann Alarm, Band steht
+	            IF "DB_Plant".State = "PLANT_FAULT" THEN
+	                IF "DB_Statistics".Statistics.ExitCount[1] <> #exitBefore[1] + 1 THEN
+	                    #check := 1;
+	                ELSIF ("DB_Plant".Alarm.Latched AND 16#0020) = 16#0000 THEN
+	                    #check := 2;
+	                ELSIF "DB_Plant".Sorters[1].State <> "SORTER_FAULT" THEN
+	                    #check := 3;
+	                ELSE
+	                    "DB_Hmi".Plant.Reset := TRUE;   // Ursache besteht noch
+	                    #step := 502;
+	                END_IF;
+	            ELSIF #stepTimer > T#25S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        502:  // RESET ohne Beheben der Ursache: Störung kommt wieder
+	            IF #stepTimer >= T#2S THEN
+	                IF "DB_Plant".Sorters[1].State <> "SORTER_FAULT" THEN
+	                    #check := 1;
+	                ELSIF ("DB_Plant".Alarm.Latched AND 16#0020) = 16#0000 THEN
+	                    #check := 2;
+	                ELSE
+	                    "DB_Simulation".Faults.SorterStuck[1] := FALSE;
+	                    "DB_Hmi".Plant.Reset := TRUE;
+	                    #step := 503;
+	                END_IF;
+	            END_IF;
+
+	        503:
+	            IF "DB_Plant".State = "PLANT_READY" AND "DB_Plant".Sorters[1].State = "SORTER_RETRACTED" THEN
+	                "DB_Hmi".Plant.Start := TRUE;
+	                #step := 504;
+	            ELSIF #stepTimer > T#5S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        504:
+	            IF "DB_Plant".State = "PLANT_AUTO" THEN
+	                #step := 800;
+	            ELSIF #stepTimer > T#3S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        // ---------- Test 12: Lichtschranke S6 defekt ----------
+	        600:
+	            "DB_Simulation".Faults.SortEntrySensorDefect := TRUE;
+	            "DB_Simulation".ManualPackage.Material := "MAT_METAL";
+	            "DB_Simulation".ManualPackage.Size := "SIZE_SMALL";
+	            "DB_Simulation".ManualPackage.Weight := 2.0;
+	            "DB_Simulation".ManualPackage.QualityOk := TRUE;
+	            "DB_Simulation".ManualPackage.Generate := TRUE;
+	            #step := 601;
+
+	        601:  // Paket ERROR, Alarm, Band steht
+	            IF "DB_Plant".State = "PLANT_FAULT" THEN
+	                #found := FALSE;
+	                FOR #i := 1 TO "MAX_PACKAGES" DO
+	                    IF "DB_Packages".Packages[#i].Status = "PKG_ERROR" THEN
+	                        #found := TRUE;
+	                    END_IF;
+	                END_FOR;
+	                IF ("DB_Plant".Alarm.Latched AND 16#0200) = 16#0000 THEN
+	                    #check := 1;
+	                ELSIF "DB_Statistics".Statistics.Errors <> #errorsBefore + 1 THEN
+	                    #check := 2;
+	                ELSIF NOT #found THEN
+	                    #check := 3;
+	                ELSE
+	                    "DB_Simulation".Faults.SortEntrySensorDefect := FALSE;
+	                    "DB_Hmi".Plant.Reset := TRUE;
+	                    #step := 602;
+	                END_IF;
+	            ELSIF #stepTimer > T#20S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        602:  // RESET entfernt das ERROR-Paket
+	            IF "DB_Plant".State = "PLANT_READY" THEN
+	                IF "DB_Packages".ActiveCount <> 0 THEN
+	                    #check := 1;
+	                ELSE
+	                    "DB_Hmi".Plant.Start := TRUE;
+	                    #step := 603;
+	                END_IF;
+	            ELSIF #stepTimer > T#5S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        603:  // Das nicht mehr verfolgte Paket fällt ans Bandende, ohne Zähler und Alarm
+	            IF "DB_Plant".State = "PLANT_AUTO" AND #simEmpty THEN
+	                IF "DB_Statistics".Statistics.Total <> #totalBefore THEN
+	                    #check := 1;
+	                ELSIF "DB_Plant".Alarm.Latched <> 16#0000 THEN
+	                    #check := 2;
+	                ELSE
+	                    #step := 800;
+	                END_IF;
+	            ELSIF #stepTimer > T#30S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        // ---------- Test 13: Not-Halt ----------
+	        700:
+	            "DB_Hmi".Plant.SelectManual := TRUE;
+	            #step := 701;
+
+	        701:  // Handbetrieb: Band ein, Sortierer 1 aus
+	            IF "DB_Plant".State = "PLANT_MANUAL" THEN
+	                "DB_Hmi".Manual.ConveyorRun := TRUE;
+	                "DB_Hmi".Manual.SorterExtend[1] := TRUE;
+	                #step := 702;
+	            ELSIF #stepTimer > T#3S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        702:
+	            IF "DB_Plant".Sorters[1].State = "SORTER_EXTENDED" AND "DB_Plant".Conveyor.Running THEN
+	                "DB_Simulation".Faults.EmergencyStop := TRUE;
+	                #step := 703;
+	            ELSIF #stepTimer > T#3S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        703:  // Not-Halt: Band aus, Sortierer zurück, Handbedienung gelöscht
+	            IF #stepTimer >= T#1500MS THEN
+	                IF "DB_Plant".State <> "PLANT_EMERGENCY" THEN
+	                    #check := 1;
+	                ELSIF "DB_Plant".Conveyor.Running THEN
+	                    #check := 2;
+	                ELSIF "DB_Hmi".Manual.ConveyorRun OR "DB_Hmi".Manual.SorterExtend[1] THEN
+	                    #check := 3;
+	                ELSIF ("DB_Plant".Alarm.Latched AND 16#0001) = 16#0000 THEN
+	                    #check := 4;
+	                ELSIF "DB_Plant".Sorters[1].State <> "SORTER_RETRACTED" THEN
+	                    #check := 5;
+	                ELSE
+	                    "DB_Simulation".Faults.EmergencyStop := FALSE;
+	                    #step := 704;
+	                END_IF;
+	            END_IF;
+
+	        704:  // Entriegeln allein genügt nicht
+	            IF #stepTimer >= T#500MS THEN
+	                IF "DB_Plant".State <> "PLANT_EMERGENCY" THEN
+	                    #check := 1;
+	                ELSE
+	                    "DB_Hmi".Plant.Reset := TRUE;
+	                    #step := 705;
+	                END_IF;
+	            END_IF;
+
+	        705:  // Nach RESET zurück im Handbetrieb, nichts läuft von allein an
+	            IF "DB_Plant".State = "PLANT_MANUAL" THEN
+	                IF "DB_Plant".Conveyor.Running THEN
+	                    #check := 1;
+	                ELSIF "DB_Plant".Sorters[1].State <> "SORTER_RETRACTED" THEN
+	                    #check := 2;
+	                ELSE
+	                    "DB_Hmi".Plant.SelectManual := FALSE;
+	                    #step := 706;
+	                END_IF;
+	            ELSIF #stepTimer > T#3S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        706:
+	            IF "DB_Plant".State = "PLANT_READY" THEN
+	                #step := 800;
+	            ELSIF #stepTimer > T#2S THEN
+	                #check := #CHECK_TIMEOUT;
+	            END_IF;
+
+	        // ---------- Auswertung und Wiederherstellung ----------
+	        800:
+	            "DB_Test".Results[#testNo].Duration := #testTimer;
+	            IF #failed THEN
+	                "DB_Test".Results[#testNo].Status := #RES_FAILED;
+	                "DB_Test".Failed := "DB_Test".Failed + 1;
+	                "FC_TestLog"(Event := 6, Id := INT_TO_DINT("DB_Test".Results[#testNo].FailStep), Value := #RES_FAILED);
+	            ELSE
+	                "DB_Test".Results[#testNo].Status := #RES_OK;
+	                "DB_Test".Passed := "DB_Test".Passed + 1;
+	                "FC_TestLog"(Event := 6, Id := 0, Value := #RES_OK);
+	            END_IF;
+	            #testNo := #testNo + 1;
+	            IF #testNo > #TEST_COUNT THEN
+	                #step := 900;
+	            ELSIF #failed OR "DB_Plant".State <> "PLANT_AUTO" THEN
+	                #step := 850;
+	            ELSE
+	                #step := 200;
+	            END_IF;
+
+	        850:  // Nach einem Fehler: Störungen aufheben, Anlage wieder in Automatik
+	            "DB_Simulation".Settings.AutoGenerate := FALSE;
+	            "DB_Simulation".ManualPackage.Generate := FALSE;
+	            FOR #i := 1 TO "SORTER_COUNT" DO
+	                "DB_Simulation".Faults.SorterBlocked[#i] := FALSE;
+	                "DB_Simulation".Faults.SorterStuck[#i] := FALSE;
+	            END_FOR;
+	            "DB_Simulation".Faults.SortEntrySensorDefect := FALSE;
+	            "DB_Simulation".Faults.EmergencyStop := FALSE;
+	            "DB_Hmi".Plant.SelectManual := FALSE;
+	            "DB_Hmi".Plant.Reset := TRUE;
+	            #step := 851;
+
+	        851:
+	            IF "DB_Plant".State = "PLANT_AUTO" THEN
+	                #step := 200;
+	            ELSIF "DB_Plant".State = "PLANT_READY" THEN
+	                "DB_Hmi".Plant.Start := TRUE;
+	                #step := 852;
+	            ELSIF #stepTimer > T#10S THEN
+	                #step := 950;
+	            END_IF;
+
+	        852:
+	            IF "DB_Plant".State = "PLANT_AUTO" THEN
+	                #step := 200;
+	            ELSIF #stepTimer > T#3S THEN
+	                #step := 950;
+	            END_IF;
+
+	        // ---------- Ende ----------
+	        900:  // Alle Tests durchlaufen
+	            "DB_Test".Running := FALSE;
+	            "DB_Test".Done := TRUE;
+	            "DB_Test".CurrentTest := 0;
+
+	        ELSE  // 950: Abbruch
+	            "DB_Simulation".Settings.AutoGenerate := FALSE;
+	            "DB_Simulation".ManualPackage.Generate := FALSE;
+	            FOR #i := 1 TO "SORTER_COUNT" DO
+	                "DB_Simulation".Faults.SorterBlocked[#i] := FALSE;
+	                "DB_Simulation".Faults.SorterStuck[#i] := FALSE;
+	            END_FOR;
+	            "DB_Simulation".Faults.SortEntrySensorDefect := FALSE;
+	            "DB_Simulation".Faults.EmergencyStop := FALSE;
+	            IF #testNo >= 1 AND #testNo <= #TEST_COUNT THEN
+	                IF "DB_Test".Results[#testNo].Status = #RES_RUNNING THEN
+	                    "DB_Test".Results[#testNo].Status := #RES_FAILED;
+	                    "DB_Test".Results[#testNo].FailStep := #prevStep;
+	                    "DB_Test".Failed := "DB_Test".Failed + 1;
+	                END_IF;
+	            END_IF;
+	            "DB_Test".Running := FALSE;
+	            "DB_Test".Aborted := TRUE;
+	    END_CASE;
+
+	    // Erste falsche Prüfung: festhalten und Test als fehlgeschlagen auswerten
+	    IF #check <> 0 AND #testNo >= 1 AND #testNo <= #TEST_COUNT THEN
+	        "DB_Test".Results[#testNo].FailStep := #step;
+	        "DB_Test".Results[#testNo].FailCheck := #check;
+	        "FC_TestLog"(Event := 7, Id := INT_TO_DINT(#step), Value := #check);
+	        #failed := TRUE;
+	        #step := 800;
+	    END_IF;
+	END_REGION
+END_FUNCTION_BLOCK

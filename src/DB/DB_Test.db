@@ -1,0 +1,51 @@
+DATA_BLOCK "DB_Test"
+TITLE = Automatischer Funktionstest
+{ S7_Optimized_Access := 'TRUE' }
+// Bedienung und Ergebnisse von FB_TestRunner (Tests 001-013, docs/Testanleitung.md).
+// Start = TRUE startet den Ablauf, Abort = TRUE bricht ab.
+// Results[n].Status: 0 = offen, 1 = läuft, 2 = OK, 3 = FEHLER
+// Log: jeder Zustandswechsel mit Zeit seit Teststart. Event-Codes:
+//   1 Anlage State      Value = PLANT_*
+//   2 Paket Status      Id = Paket-ID, Value = PKG_*
+//   3 Sortierer State   Id = Sortierer 1..3, Value = SORTER_*
+//   4 Alarm Latched     Value = Bitmuster (Hex-Anzeige wählen)
+//   5 Test beginnt      Value = Testnummer
+//   6 Test Ergebnis     Id = Schritt, in dem der Test fehlschlug (0 = keiner), Value = 2 OK / 3 FEHLER
+//   7 Prüfung falsch    Id = Schritt, Value = Nummer der Prüfung im Schritt
+VERSION : 0.1
+NON_RETAIN
+   VAR
+      Start : Bool;   // Taste: Testablauf starten (wird zurückgesetzt)
+      Abort : Bool;   // Taste: Testablauf abbrechen (wird zurückgesetzt)
+      Running : Bool;   // Testablauf läuft
+      Done : Bool;   // Testablauf vollständig beendet
+      Aborted : Bool;   // abgebrochen (Taste Abort oder Anlage nicht wiederherstellbar)
+      CurrentTest : Int;   // laufender Test 1..13, 0 = Vorbereitung
+      CurrentStep : Int;   // laufender Schritt in FB_TestRunner
+      Elapsed : Time;   // Zeit seit Teststart
+      Passed : Int;   // Anzahl Tests OK
+      Failed : Int;   // Anzahl Tests FEHLER
+      Results : Array[1..13] of Struct
+         Status : Int;   // 0 offen, 1 läuft, 2 OK, 3 FEHLER
+         FailStep : Int;   // Schritt, in dem der Test fehlschlug
+         FailCheck : Int;   // Nummer der Prüfung in diesem Schritt
+         Target : Int;   // gemessenes Ziel (Tests 1-8)
+         Reason : Int;   // gemessener Ausschussgrund (Tests 1-8)
+         Weight : Real;   // gemessenes Gewicht in kg (Tests 1-8)
+         Duration : Time;   // Dauer des Tests
+      END_STRUCT;
+      LogCount : Int;   // Anzahl Einträge im Log
+      LogFull : Bool;   // Log voll, weitere Einträge verworfen
+      Log : Array[1..500] of Struct
+         T : Time;   // Zeit seit Teststart
+         Test : Int;   // laufender Test
+         Event : Int;   // Ereignis-Code (siehe oben)
+         Id : DInt;   // Paket-ID, Sortierer oder Schritt
+         Value : Int;   // neuer Wert
+      END_STRUCT;
+   END_VAR
+
+
+BEGIN
+
+END_DATA_BLOCK

@@ -3,6 +3,8 @@ TITLE = Hauptbaustein der Sortieranlage
 { S7_Optimized_Access := 'TRUE' }
 // Wird alle 100 ms aus OB30 aufgerufen (Instanz: IDB_Main).
 // Feste Reihenfolge pro Durchlauf:
+//   0. Testablauf     – nur im Simulationsbetrieb: automatischer Funktionstest (DB_Test),
+//                       bedient Simulation und HMI-Tasten vor allen anderen Bausteinen
 //   1. Simulation     – bewegt Pakete und Sortierer, erzeugt DB_IO.SimInputs
 //                       aus den Ausgängen des vorherigen Durchlaufs
 //   2. Eingänge       – DB_IO.Inputs aus Simulation oder Hardware
@@ -12,6 +14,7 @@ TITLE = Hauptbaustein der Sortieranlage
 // danach setzt FB_Plant die HMI-Tasten zurück. FB_Counters zählt zuletzt.
 VERSION : 0.1
    VAR
+      TestRunner : "FB_TestRunner";
       Simulation : "FB_Simulation";
       InputMapping : "FB_InputMapping";
       Detection : "FB_Detection";
@@ -25,8 +28,9 @@ VERSION : 0.1
 
 
 BEGIN
-	// 1. Simulation (nur im Simulationsbetrieb)
+	// 0. und 1. Testablauf und Simulation (nur im Simulationsbetrieb)
 	IF "DB_IO".SimMode THEN
+	    #TestRunner();
 	    #Simulation(Outputs := "DB_IO".Outputs,
 	                SimInputs := "DB_IO".SimInputs);
 	END_IF;
