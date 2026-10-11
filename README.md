@@ -15,6 +15,22 @@ Es wird keine echte Hardware benötigt: Pakete, Sensoren und Aktoren werden in d
               └────────────────────────────────────┘
 ```
 
+**ST** steht für **Station**: eine feste Stelle entlang des Bandes, an der mit dem Paket etwas passiert. Die Position ist in Prozent der Bandlänge angegeben.
+
+| Station | Position | Aufgabe | Sensor dort |
+|---|---|---|---|
+| **ST1** Erkennung | 2 % | Paket kommt aufs Band, bekommt eine ID | Lichtschranke S1 |
+| **ST2** Größe | 15 % | klein oder groß | S2 |
+| **ST3** Material | 25 % | Metall oder Kunststoff | S3 (induktiver Sensor) |
+| **ST4** Gewicht | 35 % | wiegen | S4 (Waage, analog) |
+| **ST5** Qualität | 45 % | OK oder Ausschuss, danach steht das Ziel fest | S5 |
+| **ST6** Sortierstrecke | ab 55 % | Ausschleusen mit den Sortierern Q1–Q3 (bei 65/75/85 %), Rest fällt am Bandende in Ausgang 4 | S6 am Anfang als Kontrolle |
+
+Die Bezeichnungen ST und S sind absichtlich verschieden:
+
+- **ST1–ST6** sind **Stationen**, also Orte und Aufgaben.
+- **S1–S16** sind **Sensoren**, also einzelne Geräte mit einem Eingang an der SPS.
+
 Jedes Paket hat Material, Größe, Gewicht und Qualität. Es durchläuft die Prüfstationen und wird an der Sortierstrecke von einem pneumatischen Sortierer ausgeschleust. Pakete, die nicht ausgeschleust werden, laufen am Bandende in den Ausschuss.
 
 | Bedingung | Ziel |

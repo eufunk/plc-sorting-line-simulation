@@ -1,7 +1,8 @@
 """Erzeugt aus docs/*.md, den Tagesplänen und den Quellen unter src/ eine einzelne
 HTML-Seite mit der gesamten Projektdokumentation.
 
-Aufruf:  python tools/make_docs_site.py [Zieldatei]
+Aufruf:  python tools/make_docs_site.py [Zieldatei] [--offline]
+  --offline: Diagramm-Bibliothek einbetten, damit die Datei ohne Internet läuft
 Standard-Ziel: C:\\TIA\\Doku\\Sortieranlage_Doku.html (außerhalb des Repositorys)
 """
 
@@ -352,6 +353,10 @@ details.block pre.code { margin: 0 14px 14px; }
       var parent = target.closest("details"); if (parent) parent.open = true;
       target.scrollIntoView({ block: "start" });
     } else { window.scrollTo(0, 0); }
+    // Offline-Fassung: Diagramme erst zeichnen, wenn ihr Abschnitt sichtbar ist
+    if (window.mermaid && sec.querySelector("pre.mermaid:not([data-processed])")) {
+      window.mermaid.run({ querySelector: "#" + id + " pre.mermaid:not([data-processed])" });
+    }
     try { localStorage.setItem("doku-sec", id); } catch (e) {}
   }
   document.addEventListener("click", function (e) {
@@ -375,10 +380,34 @@ details.block pre.code { margin: 0 14px 14px; }
 """
 
 
+MERMAID_LIB = Path(r"C:\TIA\Doku\lib\mermaid-10.9.1.min.js")
+
+
+def offline(page):
+    """Diagramm-Bibliothek in die Seite packen, damit sie ohne Internet läuft
+    (auf claude.ai zeichnet der Viewer die Diagramme selbst)."""
+    if not MERMAID_LIB.exists():
+        sys.exit(f"Fehlt: {MERMAID_LIB} – einmalig von "
+                 "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js herunterladen")
+    lib = MERMAID_LIB.read_text(encoding="utf-8").replace("</script", "<\\/script")
+    init = ('<script>mermaid.initialize({ startOnLoad: false, theme: '
+            'matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default" });</script>')
+    page = page.replace("<script>\n(function () {", f"<script>{lib}</script>\n{init}\n<script>\n(function () {{", 1)
+    # Als eigenständige Datei braucht die Seite ein vollständiges HTML-Gerüst (auf claude.ai ergänzt es der Viewer)
+    head, _, body = page.partition("</style>")
+    return ('<!doctype html>\n<html lang="de">\n<head>\n<meta charset="utf-8">\n'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+            f'{head}body {{ margin: 0; }}\n</style>\n</head>\n<body>{body}</body>\n</html>\n')
+
+
 def main():
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TARGET
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    target = Path(args[0]) if args else DEFAULT_TARGET
+    page = build()
+    if "--offline" in sys.argv:
+        page = offline(page)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(build(), encoding="utf-8")
+    target.write_text(page, encoding="utf-8")
     print(f"{len(SECTIONS)} Abschnitte, {len(BLOCKS)} Bausteine -> {target} ({target.stat().st_size // 1024} KB)")
 
 
