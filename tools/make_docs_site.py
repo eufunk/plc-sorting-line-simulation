@@ -90,6 +90,11 @@ def rewrite_links(html_text, section_id):
             return f'href="#verlauf" data-anchor="plan-{stem}"'
         if stem in BLOCKS:
             return f'href="#programm" data-anchor="code-{stem}"'
+        if stem in ("Constants", "IoTags"):
+            return f'href="#programm" data-anchor="ordner-{"Constants" if stem == "Constants" else "Tags"}"'
+        folder = path.rstrip("/").split("/")[-1]
+        if folder in FOLDERS:
+            return f'href="#programm" data-anchor="ordner-{folder}"'
         if path.rstrip("/").endswith(("Planung", "Planung/")):
             return 'href="#verlauf"'
         return 'href="#programm"'
@@ -113,14 +118,48 @@ def strip_first_h1(text):
     return re.sub(r"\A\s*# .*\n", "", text, count=1)
 
 
+# Ordner unter src/: Überschrift und kurze Erklärung im Abschnitt "Programm"
+FOLDERS = {
+    "Constants": ("PLC-Konstanten", "Anwenderkonstanten: Codes für Zustände und Ziele, Positionen am Band, Zeiten und Grenzwerte. Angelegt per Excel-Import."),
+    "UDT": ("Datentypen", "PLC-Datentypen: Aufbau von Paket, Sortierer, Förderband, Alarmen, Statistik und Ein-/Ausgangsabbild."),
+    "DB": ("Datenbausteine", "Globale Datenbausteine mit dem Zustand der Anlage. IDB_Main ist der Instanz-Datenbaustein von FB_Main."),
+    "Tags": ("E/A-Variablen", "PLC-Variablen mit Hardware-Adressen (%I, %IW, %Q) – die Ein-/Ausgangsliste der Anlage."),
+    "FC": ("Funktionen", "Funktionen ohne eigenes Gedächtnis: Zufallszahlen, Testprotokoll, Anzeigewerte für das Bedienpanel."),
+    "FB": ("Funktionsbausteine", "Funktionsbausteine mit eigenen Instanzdaten: Simulation, Steuerlogik und automatischer Testablauf."),
+    "OB": ("Organisationsbausteine", "Einstiegspunkte des Betriebssystems: OB30 ruft im 100-ms-Takt FB_Main auf, OB1 bleibt leer."),
+}
+CSV_FILES = {
+    "Constants": (SRC / "Constants" / "Constants.csv", ["Name", "Datentyp", "Wert", "Kommentar"]),
+    "Tags": (SRC / "Tags" / "IoTags.csv", ["Name", "Datentyp", "Adresse", "Kommentar"]),
+}
+
+
 def section_program():
-    parts = [md_to_html(strip_first_h1((SRC / "README.md").read_text(encoding="utf-8")), "programm")]
-    labels = {"OB": "Organisationsbausteine", "FB": "Funktionsbausteine", "FC": "Funktionen",
-              "UDT": "Datentypen", "DB": "Datenbausteine"}
-    parts.append('<h2 id="programm--bausteine">Bausteine</h2>')
-    for folder, label in labels.items():
+    intro = md_to_html(strip_first_h1((SRC / "README.md").read_text(encoding="utf-8")), "programm")
+    # Ordnernamen in der Übersichtstabelle verlinken
+    for folder in FOLDERS:
+        intro = intro.replace(f"<td><code>{folder}/</code></td>",
+                              f'<td><a class="folder-link" href="#programm" data-anchor="ordner-{folder}">'
+                              f'<code>{folder}/</code></a></td>')
+    parts = [intro, '<h2 id="programm--bausteine">Ordner und Bausteine</h2>']
+    back = '<p class="back"><a href="#programm" data-anchor="">↑ zur Ordnerübersicht</a></p>'
+    for folder, (label, text) in FOLDERS.items():
+        if folder in CSV_FILES:
+            path, cols = CSV_FILES[folder]
+            with open(path, encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f, delimiter=";"))
+            body = "".join("<tr>" + "".join(f"<td>{html.escape(r[c])}</td>" for c in cols) + "</tr>" for r in rows)
+            head = "".join(f"<th>{c}</th>" for c in cols)
+            parts.append(f'<div class="folder" id="ordner-{folder}"><h3><code>src/{folder}/</code> {label} '
+                         f'<span class="count">{len(rows)} Einträge</span></h3><p class="fdesc">{text}</p>'
+                         f'<details class="block" open><summary><span class="bname">{path.name}</span>'
+                         f'<span class="btitle">{label}</span><span class="blines">{len(rows)} Einträge</span></summary>'
+                         f'<div class="scroll"><table class="data"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
+                         f'</details>{back}</div>')
+            continue
         items = [(n, b) for n, b in BLOCKS.items() if b[0] == folder]
-        parts.append(f'<h3 id="programm--{folder.lower()}">{label} <span class="count">{len(items)}</span></h3>')
+        parts.append(f'<div class="folder" id="ordner-{folder}"><h3><code>src/{folder}/</code> {label} '
+                     f'<span class="count">{len(items)} Dateien</span></h3><p class="fdesc">{text}</p>')
         for name, (_, fname, title, comment, code, lines) in items:
             desc = html.escape(" ".join(comment[:3]))
             parts.append(
@@ -130,16 +169,7 @@ def section_program():
                 f'<span class="blines">{lines} Zeilen</span></summary>'
                 f'<p class="bdesc">{desc}</p>'
                 f'<pre class="code src"><code>{code}</code></pre></details>')
-    # Konstanten und E/A-Variablen
-    for title, path, cols in [("PLC-Konstanten", SRC / "Constants" / "Constants.csv", ["Name", "Datentyp", "Wert", "Kommentar"]),
-                              ("E/A-Variablen", SRC / "Tags" / "IoTags.csv", ["Name", "Datentyp", "Adresse", "Kommentar"])]:
-        with open(path, encoding="utf-8", newline="") as f:
-            rows = list(csv.DictReader(f, delimiter=";"))
-        body = "".join("<tr>" + "".join(f"<td>{html.escape(r[c])}</td>" for c in cols) + "</tr>" for r in rows)
-        head = "".join(f"<th>{c}</th>" for c in cols)
-        parts.append(f'<details class="block" id="code-{slug(title)}"><summary><span class="bname">{title}</span>'
-                     f'<span class="btitle">{path.name}</span><span class="blines">{len(rows)} Einträge</span></summary>'
-                     f'<div class="scroll"><table class="data"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div></details>')
+        parts.append(back + "</div>")
     return "\n".join(parts)
 
 
@@ -284,6 +314,18 @@ details.block pre.code { margin: 0 14px 14px; }
 .plan-body { padding: 0 18px 12px; }
 .plan-body h2 { font-size: 22px; margin-top: 24px; }
 .count { font: 12px var(--f-mono); color: var(--muted); font-weight: 400; }
+.folder { margin-top: 28px; padding-top: 4px; scroll-margin-top: 16px; }
+.folder h3 { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.folder h3 code { font-size: 15px; background: var(--accent-soft); color: var(--accent); }
+.fdesc { color: var(--muted); margin: 0 0 10px; }
+.folder.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .folder.flash { animation: none; } }
+.folder-link { text-decoration: none; }
+.folder-link code { color: var(--accent); border-bottom: 1px dashed var(--accent); }
+.folder-link:hover code { background: var(--accent-soft); }
+.back { margin: 6px 0 0; font-size: 14px; }
+.back a { text-decoration: none; }
 .pill { font: 500 11px var(--f-mono); text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px; border-radius: 10px; }
 .pill.erledigt { background: var(--accent-soft); color: var(--accent); }
 .pill.offen { background: var(--signal-soft); color: var(--signal); }
@@ -352,6 +394,9 @@ details.block pre.code { margin: 0 14px 14px; }
       if (target.tagName === "DETAILS") target.open = true;
       var parent = target.closest("details"); if (parent) parent.open = true;
       target.scrollIntoView({ block: "start" });
+      if (target.classList.contains("folder")) {
+        target.classList.remove("flash"); void target.offsetWidth; target.classList.add("flash");
+      }
     } else { window.scrollTo(0, 0); }
     // Offline-Fassung: Diagramme erst zeichnen, wenn ihr Abschnitt sichtbar ist
     if (window.mermaid && sec.querySelector("pre.mermaid:not([data-processed])")) {
