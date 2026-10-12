@@ -88,3 +88,4 @@ Der aktuelle Arbeitsstand steht im neuesten Plan unter [docs/Planung/](docs/Plan
 
 - [FeatureSpec](docs/FeatureSpec.md) – Ziel, Sortierregeln, Betriebsarten, Programmstruktur, HMI, Testfälle
 - [Anlagenkonfiguration](docs/Anlagenkonfiguration.md) – Bandgeometrie, Stationspositionen, I/O-Liste, Zustandsdiagramme, Alarme
+- [Programmablaufplan](docs/Programmablauf.md) – Aufrufhierarchie, Ablauf eines Zyklus, Datenfluss, Sensoren und Aktoren, Lebenslauf eines Pakets

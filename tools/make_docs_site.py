@@ -29,6 +29,7 @@ SECTIONS = [
     ("spezifikation", "Spezifikation", DOCS / "FeatureSpec.md"),
     ("anlage", "Anlagenkonfiguration", DOCS / "Anlagenkonfiguration.md"),
     ("programm", "Programm", SRC / "README.md"),
+    ("ablauf", "Programmablaufplan", DOCS / "Programmablauf.md"),
     ("test", "Test", DOCS / "Testanleitung.md"),
     ("hmi", "Bedienpanel", DOCS / "HMI.md"),
     ("umgebung", "Testumgebung", DOCS / "Anleitung_Azure-VM.md"),
@@ -379,7 +380,7 @@ details.block pre.code { margin: 0 14px 14px; }
 </div>
 <script>
 (function () {
-  var tags = { start: "00", spezifikation: "01", anlage: "02", programm: "03", test: "04", hmi: "05", umgebung: "06", offen: "07", verlauf: "08" };
+  var tags = { start: "00", spezifikation: "01", anlage: "02", programm: "03", ablauf: "04", test: "05", hmi: "06", umgebung: "07", offen: "08", verlauf: "09" };
   var links = document.querySelectorAll("#nav a");
   links.forEach(function (a) { a.setAttribute("data-tag", tags[a.dataset.sec] || ""); });
   var stats = document.getElementById("stats");
