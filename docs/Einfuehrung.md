@@ -70,10 +70,17 @@ flowchart LR
         CTRL -->|"Befehle an Band und Sortierer"| SIM
     end
     CTRL <--> HMI["Bedienpanel<br/>(Panel-Simulation)"]
-    REAL["Echte Anlage"] -.->|"später: ein Schalter genügt"| CTRL
+    REAL["Echte Anlage"] -.->|"später: SimMode = FALSE"| CTRL
 ```
 
-Mit einem einzigen Umschalter würde die Steuerung statt der Simulation echte Ein- und Ausgänge verwenden. Das Steuerungsprogramm selbst bleibt dabei unverändert.
+Der Umschalter ist eine einzige Variable im Programm: **`SimMode`** im Datenbaustein `DB_IO`, der Sammelstelle für alle Ein- und Ausgangssignale. Ab Werk steht sie auf `TRUE`.
+
+| `SimMode` | Woher kommen die Sensorsignale? | Wohin gehen die Befehle? |
+|---|---|---|
+| `TRUE` – Simulation | vom Simulationsteil im Programm | nur an die Simulation; die echten Ausgänge der SPS bleiben aus |
+| `FALSE` – echte Anlage | von den echten Eingängen der SPS, an denen die Sensoren angeklemmt sind | an die echten Ausgänge: Bandmotor, Ventile der Sortierer, Leuchten |
+
+Zwei kleine Bausteine erledigen das Umschalten. Der eine liest die Eingänge (`FB_InputMapping`), der andere schreibt die Ausgänge (`FB_OutputMapping`). Bei `FALSE` wird zusätzlich der Simulationsteil nicht mehr aufgerufen. Das eigentliche Steuerungsprogramm dazwischen merkt vom Umschalten nichts und bleibt unverändert. Für eine echte Anlage müsste man nur die Hardware anschließen, die Adressen der Ein- und Ausgänge prüfen und `SimMode` auf `FALSE` setzen.
 
 Die Simulation kann außerdem gezielt **Fehler einbauen**: ein klemmender Sortierer, ein defekter Sensor, ein Not-Halt. So lässt sich prüfen, ob die Steuerung richtig reagiert, ohne etwas kaputt zu machen.
 
@@ -94,7 +101,14 @@ Das Ergebnis: **13 von 13 Tests bestanden**. Jeder Schritt wird protokolliert, F
 
 ## Das Bedienpanel
 
-Auf dem Bedienpanel sieht man die Anlage live: Pakete wandern über das Band, Lampen zeigen den Zustand, Tasten starten und stoppen die Anlage. Weitere Bilder zeigen Paketdaten, Statistik, Diagnose und Alarme.
+Auf dem Bedienpanel sieht man die Anlage live. Das Übersichtsbild ist teilweise fertig. Im Bild unten sieht man:
+
+- **oben** die Tasten zu den weiteren Bildern: Paketdaten, Statistik, Diagnose, Alarme
+- **links** den Anlagenzustand, hier `AUTOMATIK`, und daneben den Schalter Hand/Automatik
+- **in der Mitte** das Band mit den Paketen, die sich live mitbewegen. Die Farbe zeigt das Ziel: weiß = noch nicht entschieden, hellgrün = Ausgang 2, rot = Ausschuss.
+- **unten** die Tasten START, STOPP und RESET (Störung quittieren)
+
+Als Nächstes kommen ins Übersichtsbild die Sortierer Q1–Q3, die Ausgänge mit ihren Zählern, die Meldeleuchten H1 (Betrieb) und H2 (Störung) sowie eine Alarmanzeige. Die Bilder für Paketdaten, Statistik, Diagnose und Alarme folgen danach.
 
 <figure>
 <img src="img/hmi_uebersicht.png" alt="Übersichtsbild des Bedienpanels in der Simulation: fünf Pakete auf dem Band, Zustand AUTOMATIK">
@@ -185,7 +199,7 @@ Dazu gibt es eine **Präsentation** mit 17 Folien, auch als vertontes Video mit 
 ## Kurze Antworten auf typische Fragen
 
 **Warum Simulation statt echter Hardware?**
-Weil sie günstig ist und sich Fehler gefahrlos durchspielen lassen. Das Programm ist so gebaut, dass es mit einem Umschalter auch an einer echten Anlage laufen kann.
+Weil sie günstig ist und sich Fehler gefahrlos durchspielen lassen. Das Programm ist so gebaut, dass es auch an einer echten Anlage laufen kann: Eine Variable (`SimMode` in `DB_IO`) schaltet die Ein- und Ausgänge von der Simulation auf die echte Hardware um, die Steuerlogik bleibt gleich.
 
 **Woher weiß man, dass es funktioniert?**
 13 automatische Tests decken die Sortierregeln, Grenzwerte und Störfälle ab. Alle 13 sind bestanden. Jeder Testschritt wird protokolliert.
