@@ -25,6 +25,7 @@ DEFAULT_TARGET = Path(r"C:\TIA\Doku\Sortieranlage_Doku.html")
 
 # Abschnitte der Seite: (id, Navigationstitel, Quelle)
 SECTIONS = [
+    ("einfuehrung", "Einführung", DOCS / "Einfuehrung.md"),
     ("start", "Überblick", REPO / "README.md"),
     ("spezifikation", "Spezifikation", DOCS / "FeatureSpec.md"),
     ("anlage", "Anlagenkonfiguration", DOCS / "Anlagenkonfiguration.md"),
@@ -48,6 +49,18 @@ def slug(text):
 
 def img_data_uri(path):
     return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode()
+
+
+def embed_images(html_text):
+    """Bilder aus docs/img einbetten: PNG als data-URI, SVG direkt in die Seite,
+    damit es die Farben der Seite (hell/dunkel) übernimmt."""
+    def repl(m):
+        path = DOCS / m.group(1)
+        if path.suffix == ".svg":
+            svg = re.sub(r"<!--.*?-->", "", path.read_text(encoding="utf-8"), flags=re.S)
+            return f'<div class="schema">{svg.strip()}</div>'
+        return m.group(0).replace(m.group(1), img_data_uri(path))
+    return re.sub(r'<img [^>]*src="(img/[^"]+)"[^>]*>', repl, html_text)
 
 
 def code_blocks():
@@ -112,7 +125,7 @@ def md_to_html(text, section_id):
     # Tabellen und Code horizontal scrollbar machen
     out = out.replace("<table>", '<div class="scroll"><table>').replace("</table>", "</table></div>")
     out = re.sub(r"<pre><code", '<pre class="code"><code', out)
-    return rewrite_links(out, section_id)
+    return rewrite_links(embed_images(out), section_id)
 
 
 def strip_first_h1(text):
@@ -201,6 +214,9 @@ def section_start():
     return body + figs
 
 
+H1 = {"einfuehrung": "Das Projekt auf einen Blick", "start": "Förderband-Sortieranlage"}
+
+
 def build():
     nav, sections = [], []
     for sid, label, src in SECTIONS:
@@ -214,7 +230,7 @@ def build():
         else:
             content = md_to_html(strip_first_h1(src.read_text(encoding="utf-8")), sid)
         sections.append(f'<section class="doc" id="{sid}"><p class="eyebrow">{label}</p>'
-                        f'<h1>{label if sid != "start" else "Förderband-Sortieranlage"}</h1>{content}</section>')
+                        f'<h1>{H1.get(sid, label)}</h1>{content}</section>')
     stats = {
         "SCL-Zeilen": sum(b[5] for n, b in BLOCKS.items() if b[0] in ("OB", "FB", "FC")),
         "Bausteine": sum(1 for b in BLOCKS.values() if b[0] in ("OB", "FB", "FC")),
@@ -302,6 +318,9 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 32px 0; }
 figure { margin: 0; }
 figure img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--ink); display: block; }
 figcaption { font: 13px var(--f-mono); color: var(--muted); margin-top: 6px; }
+.doc > figure { margin: 20px 0 28px; max-width: 920px; }
+.schema { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.schema svg { display: block; width: 100%; height: auto; }
 details.block { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); margin: 8px 0; }
 details.block summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 10px 14px; }
 details.block summary::-webkit-details-marker { display: none; }
@@ -380,16 +399,16 @@ details.block pre.code { margin: 0 14px 14px; }
 </div>
 <script>
 (function () {
-  var tags = { start: "00", spezifikation: "01", anlage: "02", programm: "03", ablauf: "04", test: "05", hmi: "06", umgebung: "07", offen: "08", verlauf: "09" };
+  var tags = { einfuehrung: "00", start: "01", spezifikation: "02", anlage: "03", programm: "04", ablauf: "05", test: "06", hmi: "07", umgebung: "08", offen: "09", verlauf: "10" };
   var links = document.querySelectorAll("#nav a");
   links.forEach(function (a) { a.setAttribute("data-tag", tags[a.dataset.sec] || ""); });
   var stats = document.getElementById("stats");
   function show(id, anchor) {
     var sec = document.getElementById(id);
-    if (!sec || !sec.classList.contains("doc")) { id = "start"; sec = document.getElementById(id); }
+    if (!sec || !sec.classList.contains("doc")) { id = "einfuehrung"; sec = document.getElementById(id); }
     document.querySelectorAll("section.doc").forEach(function (s) { s.hidden = s !== sec; });
     links.forEach(function (a) { a.classList.toggle("active", a.dataset.sec === id); });
-    stats.hidden = id !== "start";
+    stats.hidden = id !== "start" && id !== "einfuehrung";
     var target = anchor ? document.getElementById(anchor) : null;
     if (target) {
       if (target.tagName === "DETAILS") target.open = true;
@@ -415,7 +434,7 @@ details.block pre.code { margin: 0 14px 14px; }
   });
   var start = (location.hash || "").slice(1);
   if (!start) { try { start = localStorage.getItem("doku-sec") || ""; } catch (e) {} }
-  show(start || "start", "");
+  show(start || "einfuehrung", "");
   document.getElementById("theme").addEventListener("click", function () {
     var root = document.documentElement;
     var dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;

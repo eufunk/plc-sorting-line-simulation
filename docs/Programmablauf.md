@@ -32,6 +32,53 @@ flowchart TD
 
 Alle Funktionsbausteine sind **Multiinstanzen** in `FB_Main`: Ihre eigenen Merker (zum Beispiel vorherige Sensorzustände für die Flankenerkennung) liegen in `IDB_Main`. Funktionen (FC) haben kein Gedächtnis.
 
+### Was ist eine Multiinstanz?
+
+Ein **Funktionsbaustein (FB)** hat ein Gedächtnis: Variablen, die von einem Zyklus zum nächsten erhalten bleiben (statische Variablen, Bereich `VAR`, außerdem die Ausgänge `VAR_OUTPUT`). Dieses Gedächtnis muss irgendwo gespeichert werden – in einem **Instanz-Datenbaustein**. Jeder Aufruf eines FB braucht also eine *Instanz*, das heißt einen eigenen Speicherplatz.
+
+Dafür gibt es zwei Wege:
+
+| | Einzelinstanz | Multiinstanz (so in diesem Projekt) |
+|---|---|---|
+| Wo liegt das Gedächtnis? | in einem **eigenen** Instanz-DB je Aufruf, z. B. `IDB_Detection`, `IDB_Sorting` … | als Variable **im Gedächtnis des aufrufenden FB** – hier alle zusammen in `IDB_Main` |
+| Aufruf | `"FB_Detection_DB"(...)` – der DB wird beim Aufruf genannt | `#Detection(...)` – das `#` zeigt: eine Variable von `FB_Main` |
+| Anzahl DBs | ein DB pro Baustein (hier wären es 10) | ein einziger DB für alles |
+
+In `FB_Main` sind die Bausteine wie gewöhnliche Variablen deklariert, nur dass ihr Datentyp ein FB ist:
+
+```
+VAR
+   TestRunner : "FB_TestRunner";
+   Simulation : "FB_Simulation";
+   Detection  : "FB_Detection";
+   Sorting    : "FB_Sorting";
+   ...
+END_VAR
+```
+
+`IDB_Main` enthält dadurch zehn Unterbereiche `Detection`, `Sorting`, `Plant` … – in jedem steckt das Gedächtnis des jeweiligen Bausteins.
+
+### Was bewirkt das in unserem Programm?
+
+- **Gedächtnis von Zyklus zu Zyklus.** Ohne gespeicherte Werte könnte das Programm nichts „merken“. Beispiele aus den Bausteinen:
+
+  | Baustein | gemerkt in `IDB_Main.…` | wofür |
+  |---|---|---|
+  | `FB_Detection` | `infeedOld`, `exitOld[1..4]` | Zustand von S1 und S7–S10 im vorherigen Zyklus → Flanke erkennen: ein Paket wird nur **einmal** gezählt, nicht in jedem Zyklus, in dem die Lichtschranke belegt ist |
+  | `FB_Sorting` | `packageSlot[1..3]` | welches Paket der Sortierer Q1–Q3 gerade ausschleust – der Hub dauert mehrere Zyklen |
+  | `FB_Plant` | `blinkCounter`, `blink` | Blinktakt 1 Hz für die Leuchten |
+  | `FB_Conveyor` | `tickCounter` | Zyklen zählen für den Betriebsstundenzähler |
+  | `FB_Counters` | `lastStatus[1..5]`, `autoTicks` | Statuswechsel eines Pakets erkennen (zählt beim Wechsel, nicht dauernd); Laufzeit für den Durchsatz |
+  | `FB_TestRunner` | `step`, `stepTimer`, `testNo` … | an welchem Schritt welches Tests der Testablauf gerade steht |
+
+- **Ergebnisse weiterreichen.** Auch die Ausgänge eines FB liegen in seiner Instanz. `FB_Alarms` liest deshalb direkt `#Detection.PackageLost`, `#Detection.ExitTimeout` usw. – die Ergebnisse, die `FB_Detection` im selben Zyklus kurz vorher geschrieben hat.
+- **Übersichtlich.** Statt zehn Instanz-DBs gibt es nur `IDB_Main`. OB30 ruft nur `"IDB_Main"()` auf, alles andere ergibt sich aus `FB_Main`. Beim Beobachten in TIA Portal sieht man den gesamten inneren Zustand der Steuerung an einer Stelle.
+- **Sauber getrennt.** Jeder Baustein schreibt nur in seinen eigenen Bereich. `FB_Detection` kann `exitOld` von `FB_Sorting` nicht versehentlich überschreiben.
+
+### Warum sind `FC_HmiData` und `FC_TestLog` keine FBs?
+
+Sie brauchen **kein** Gedächtnis: `FC_HmiData` rechnet in jedem Zyklus die Anzeigewerte neu aus, `FC_TestLog` hängt nur einen Eintrag an das Protokoll in `DB_Test` an. Eine Multiinstanz ohne statische Variablen wäre eine leere Struktur – TIA Portal meldet dann „Struktur ohne Komponenten“. Deshalb sind diese beiden **Funktionen (FC)**: Ihre Hilfsvariablen (`VAR_TEMP`) gelten nur während des Aufrufs und sind danach weg.
+
 ## 3. Ablauf eines Zyklus – wer liest, wer schreibt
 
 | Schritt | Baustein | liest | schreibt |
