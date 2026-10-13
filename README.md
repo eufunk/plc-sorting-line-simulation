@@ -15,6 +15,11 @@ Es wird keine echte Hardware benötigt: Pakete, Sensoren und Aktoren werden in d
               └────────────────────────────────────┘
 ```
 
+<figure>
+<img src="docs/img/anlage_schema.svg" alt="Schema der Sortieranlage">
+<figcaption>Die Anlage von oben – auf der Doku-Webseite als Animation (vereinfachte Darstellung des Prinzips).</figcaption>
+</figure>
+
 **ST** steht für **Station**: eine feste Stelle entlang des Bandes, an der mit dem Paket etwas passiert. Die Position ist in Prozent der Bandlänge angegeben.
 
 | Station | Position | Aufgabe | Sensor dort |

@@ -53,14 +53,22 @@ def img_data_uri(path):
 
 def embed_images(html_text):
     """Bilder aus docs/img einbetten: PNG als data-URI, SVG direkt in die Seite,
-    damit es die Farben der Seite (hell/dunkel) übernimmt."""
+    damit es die Farben der Seite (hell/dunkel) übernimmt. Liegt neben dem SVG ein
+    gleichnamiges .js, wird das Schema damit animiert (siehe SCRIPTS)."""
     def repl(m):
-        path = DOCS / m.group(1)
+        path = DOCS / m.group(2)
         if path.suffix == ".svg":
             svg = re.sub(r"<!--.*?-->", "", path.read_text(encoding="utf-8"), flags=re.S)
+            script = path.with_suffix(".js")
+            if script.exists():
+                SCRIPTS.add(script)
+                return f'<div class="schema" data-anim="{path.stem}">{svg.strip()}</div>'
             return f'<div class="schema">{svg.strip()}</div>'
         return m.group(0).replace(m.group(1), img_data_uri(path))
-    return re.sub(r'<img [^>]*src="(img/[^"]+)"[^>]*>', repl, html_text)
+    return re.sub(r'<img [^>]*src="((?:docs/)?(img/[^"]+))"[^>]*>', repl, html_text)
+
+
+SCRIPTS = set()   # Animationen, die build() einmal am Seitenende einbindet
 
 
 def code_blocks():
@@ -237,9 +245,10 @@ def build():
         "Datentypen": sum(1 for b in BLOCKS.values() if b[0] == "UDT"),
         "Tests bestanden": "13/13",
     }
+    anim = "".join(f'<script>\n{p.read_text(encoding="utf-8")}</script>\n' for p in sorted(SCRIPTS))
     stat_html = "".join(f'<div class="stat"><b>{v}</b><span>{k}</span></div>' for k, v in stats.items())
     return TEMPLATE.replace("{{NAV}}", "\n".join(nav)).replace("{{SECTIONS}}", "\n".join(sections)) \
-                   .replace("{{STATS}}", stat_html)
+                   .replace("{{STATS}}", stat_html).replace("</main>", "</main>\n" + anim, 1)
 
 
 TEMPLATE = r"""<title>Sortieranlage Dokumentation</title>
@@ -321,6 +330,15 @@ figcaption { font: 13px var(--f-mono); color: var(--muted); margin-top: 6px; }
 .doc > figure { margin: 20px 0 28px; max-width: 920px; }
 .schema { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
 .schema svg { display: block; width: 100%; height: auto; }
+.anim-ctl { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink); }
+.anim-ctl button { font: 600 13px var(--f-body); padding: 6px 14px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: #F3F4F0; cursor: pointer; min-width: 84px; }
+.anim-ctl button[data-act="ack"] { background: transparent; color: var(--signal); border-color: var(--signal); }
+.anim-ctl button:disabled { opacity: .4; cursor: default; }
+.anim-ctl label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.anim-ctl input { accent-color: var(--signal); width: 16px; height: 16px; }
+.anim-status { color: var(--muted); }
+.anim-status.alarm { color: var(--signal); font-weight: 600; }
+.anim-info { margin: 8px 0 0; font: 13px var(--f-mono); color: var(--muted); min-height: 1.5em; }
 details.block { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); margin: 8px 0; }
 details.block summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; padding: 10px 14px; }
 details.block summary::-webkit-details-marker { display: none; }

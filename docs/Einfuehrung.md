@@ -10,7 +10,7 @@ Ein **Steuerungsprogramm für eine Paket-Sortieranlage**, wie sie in Logistikzen
 
 <figure>
 <img src="img/anlage_schema.svg" alt="Schema der Sortieranlage">
-<figcaption>Die Anlage von oben: Pakete laufen von links nach rechts über das Band, werden geprüft und sortiert.</figcaption>
+<figcaption>Die Anlage von oben. Auf der Doku-Webseite läuft das Bild als Animation: Start/Pause, eine Störung zum Zuschalten und Quittieren. Vereinfachte Darstellung des Prinzips – die echte Steuerung läuft in PLCSIM.</figcaption>
 </figure>
 
 Pakete kommen nacheinander auf ein 10 m langes Förderband. Unterwegs passieren sie fünf Prüfstationen:
